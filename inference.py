@@ -56,6 +56,8 @@ class Runner:
             if len(ids) != 1 or self.tokenizer.decode(ids).strip() != code:
                 raise RuntimeError(f"Code {code} is not a verified single token")
             self.codes[code] = ids[0]
+        template = (getattr(self.processor, "chat_template", None)
+                    or getattr(self.tokenizer, "chat_template", None))
         self.meta = {"model_id": model_id, "revision": self.revision,
             "architecture": arch, "decoder_path": self.layer_path, "depths": self.depths,
             "code_ids": self.codes, "seed": 20261004, "max_input_tokens": 4096,
@@ -64,8 +66,9 @@ class Runner:
             "run_purpose": "protocol_smoke" if compute_dtype == "bfloat16" else "T4_FP16_compatibility_only",
             "thinking": False,
             "gpu": torch.cuda.get_device_name(0),
-            "chat_template_sha256": sha(str(getattr(self.processor, "chat_template", None)
-                                              or getattr(self.tokenizer, "chat_template", None))),
+            "chat_template_sha256": sha(str(template)) if template else None,
+            "template_backend": type(self.processor).__name__,
+            "mistral_common_version": importlib.metadata.version("mistral-common") if model_id.startswith("mistralai/") else None,
             "software": {p: importlib.metadata.version(p) for p in
                          ("torch", "transformers", "accelerate", "bitsandbytes", "huggingface-hub")}}
 
