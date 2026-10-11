@@ -1,15 +1,16 @@
 # Algoverse: refusal wording and safety judgments
 
-**TLDR:** Colab step-zero inference setup for Priyadharshan's October 8 assignment. Builds exact response variants, runs native judging under both output mappings, saves raw verdicts/log probabilities and six boundary-token activations. Includes a reusable prefill-only intervention interface for the interpretability workstream. No research findings or GPU-validation claims yet.
+**TLDR:** Colab step-zero inference setup for Priyadharshan's October 8 assignment. Builds exact response variants, runs native judging under both output mappings, saves raw verdicts/log probabilities and six boundary-token activations. Includes a reusable prefill-only intervention interface for the interpretability workstream. T4/FP16 synthetic smoke execution is verified; BF16 protocol validation remains pending.
 
 - [Open the Colab notebook](https://colab.research.google.com/github/Dharshan2004/algoverse/blob/dharshan/inference-setup/notebooks/step_zero.ipynb)
 - [Research protocol](https://refusal-wording-safety-judgments.dharshanlab.chatgpt.site/)
 - [Setup, ownership and remaining checks](SETUP.md)
+- [T4 test results and limitations](TESTING.md)
 - [Inference runner](inference.py) · [Protocol helpers](protocol.py) · [Synthetic examples](examples.jsonl)
 
 ## T4 compatibility test
 
-Priyadharshan approved T4 testing on 11 October. The notebook defaults to `--compute-dtype float16` for synthetic fixtures only. The CLI still defaults to BF16. FP16 outputs are labeled `T4_FP16_compatibility_only` and cannot be used as validation of the research protocol's BF16 configuration. Actual GPU execution remains pending.
+Priyadharshan approved T4 testing on 11 October. The notebook defaults to `--compute-dtype float16` for synthetic fixtures only. The CLI still defaults to BF16. FP16 outputs are labeled `T4_FP16_compatibility_only` and cannot be used as validation of the research protocol's BF16 configuration. Both models completed 42-call T4 runs and passed artifact/identity checks. Ministral produced 0/40 INVALID outputs; Gemma produced 4/40. Peak allocated memory was 6.253/7.634 GiB respectively. See [TESTING.md](TESTING.md) for exact revisions, limitations and fixes.
 
 ```sh
 python inference.py --model ministral --compute-dtype float16 --out runs/ministral-t4
