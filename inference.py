@@ -17,10 +17,11 @@ class Runner:
             raise RuntimeError("A CUDA GPU is required")
         if compute_dtype not in ("bfloat16", "float16"):
             raise ValueError("Unsupported compute dtype")
-        if compute_dtype == "bfloat16" and not torch.cuda.is_bf16_supported():
+        if compute_dtype == "bfloat16" and not torch.cuda.is_bf16_supported(including_emulation=False):
             raise RuntimeError("BF16 requires a compatible GPU. Use --compute-dtype float16 only for the approved T4 compatibility smoke test.")
         dtype = getattr(torch, compute_dtype)
         self.torch, self.model_id = torch, model_id
+        print(f"Resolving checkpoint: {model_id}", flush=True)
         self.revision = model_info(model_id, revision=revision).sha
         torch.manual_seed(20261004)
         config = tr.AutoConfig.from_pretrained(model_id, revision=self.revision, trust_remote_code=False)
@@ -32,11 +33,13 @@ class Runner:
                           if model_id.startswith("mistralai/Ministral") else
                           tr.AutoProcessor.from_pretrained(model_id, revision=self.revision, trust_remote_code=False))
         self.tokenizer = getattr(self.processor, "tokenizer", self.processor)
+        print(f"Loading {arch} at {self.revision} with NF4/{compute_dtype}", flush=True)
         self.model = cls.from_pretrained(model_id, revision=self.revision, trust_remote_code=False,
             device_map={"": 0}, dtype=dtype,
             quantization_config=tr.BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
                 bnb_4bit_compute_dtype=dtype, bnb_4bit_use_double_quant=True)).eval()
         self.model.requires_grad_(False)
+        print("Model loaded; validating decoder hooks and answer tokens", flush=True)
         # Find exactly one language decoder ModuleList, never vision encoder layers.
         candidates = [(name, mod) for name, mod in self.model.named_modules()
                       if isinstance(mod, torch.nn.ModuleList) and name.endswith("layers")
@@ -203,6 +206,7 @@ def main():
     # eligibility is a separate dataset intake gate, not implied by this check.
     for _, _, _, turns in plans:
         runner.encode(turns)
+    print(f"Preflight passed for {len(plans)} inputs; running identity check", flush=True)
     (outdir/"run_config.json").write_text(json.dumps({**runner.meta, "args": vars(args),
         "policy": POLICY, "policy_sha256": sha(POLICY), "baseline": args.baseline,
         "input_file_sha256": sha(Path(args.input).read_text()), "validated_gpu": False}, indent=2))
@@ -229,6 +233,7 @@ def main():
                 "prompt_sha256": sha(json.dumps(turns, ensure_ascii=False)), "run_index": i}
             f.write(json.dumps(row, ensure_ascii=False)+"\n")
             f.flush()
+            print(f"Completed input {i+1}/{len(plans)}: {row['verdict']}", flush=True)
     print(f"Completed {len(plans)} calls plus two identity checks. Inspect {outdir}; synthetic outcomes are not research results.")
 
 if __name__ == "__main__":
