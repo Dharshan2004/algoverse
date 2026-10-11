@@ -6,6 +6,7 @@
 - [Research protocol](https://refusal-wording-safety-judgments.dharshanlab.chatgpt.site/)
 - [Setup, ownership and remaining checks](SETUP.md)
 - [T4 test results and limitations](TESTING.md)
+- [How the inference scripts work](INFERENCE_GUIDE.md)
 - [Inference runner](inference.py) · [Protocol helpers](protocol.py) · [Synthetic examples](examples.jsonl)
 
 ## T4 compatibility test
