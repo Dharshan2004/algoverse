@@ -111,14 +111,14 @@ The output directory must be new, preventing an accidental mixture of runs.
 
 ## The Gemma parsing correction
 
-Gemma can emit `thought\\n<channel|>A`. Here `thought` is the native channel's role label and the channel contains no reasoning. Treating that wrapper as answer prose caused false INVALIDs.
+Gemma can emit `thought\n<channel|>A`. Here `thought` is the native channel's role label and the channel contains no reasoning. Treating that wrapper as answer prose caused false INVALIDs.
 
 `normalize_native_output()` recognizes only these two prefixes for the Gemma 4 family:
 
-- `thought\\n<channel|>`
-- `<|channel>thought\\n<channel|>`
+- `thought\n<channel|>`
+- `<|channel>thought\n<channel|>`
 
-It removes one recognized empty prefix, then still requires the remainder to be exactly A or B. For example, `thought\\nexplanation<channel|>A` and `thought\\n<channel|>A because safe` remain invalid. The failed output-reminder experiment is not used by this correction.
+It removes one recognized empty prefix, then still requires the remainder to be exactly A or B. For example, `thought\nexplanation<channel|>A` and `thought\n<channel|>A because safe` remain invalid. The failed output-reminder experiment is not used by this correction.
 
 Every row keeps `raw_output`, token IDs and `raw_parsed_text`; `parsed_text` holds the normalized text and `output_normalization` records whether the rule applied. The audit separately reports raw exact-code failures and normalized verdicts.
 
