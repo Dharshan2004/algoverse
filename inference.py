@@ -9,12 +9,17 @@ from pathlib import Path
 from protocol import MODELS, MAPPINGS, POLICY, depths, messages, parse, sha, validate_records, variant
 
 class Runner:
-    def __init__(self, model_id, revision="main"):
+    def __init__(self, model_id, revision="main", compute_dtype="bfloat16"):
         import torch
         import transformers as tr
         from huggingface_hub import model_info
-        if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
-            raise RuntimeError("Use a CUDA GPU supporting BF16 (e.g. Colab L4/A100); T4 is not the specified configuration")
+        if not torch.cuda.is_available():
+            raise RuntimeError("A CUDA GPU is required")
+        if compute_dtype not in ("bfloat16", "float16"):
+            raise ValueError("Unsupported compute dtype")
+        if compute_dtype == "bfloat16" and not torch.cuda.is_bf16_supported():
+            raise RuntimeError("BF16 requires a compatible GPU. Use --compute-dtype float16 only for the approved T4 compatibility smoke test.")
+        dtype = getattr(torch, compute_dtype)
         self.torch, self.model_id = torch, model_id
         self.revision = model_info(model_id, revision=revision).sha
         torch.manual_seed(20261004)
@@ -28,9 +33,9 @@ class Runner:
                           tr.AutoProcessor.from_pretrained(model_id, revision=self.revision, trust_remote_code=False))
         self.tokenizer = getattr(self.processor, "tokenizer", self.processor)
         self.model = cls.from_pretrained(model_id, revision=self.revision, trust_remote_code=False,
-            device_map={"": 0}, dtype=torch.bfloat16,
+            device_map={"": 0}, dtype=dtype,
             quantization_config=tr.BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
-                bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_use_double_quant=True)).eval()
+                bnb_4bit_compute_dtype=dtype, bnb_4bit_use_double_quant=True)).eval()
         self.model.requires_grad_(False)
         # Find exactly one language decoder ModuleList, never vision encoder layers.
         candidates = [(name, mod) for name, mod in self.model.named_modules()
@@ -50,7 +55,10 @@ class Runner:
         self.meta = {"model_id": model_id, "revision": self.revision,
             "architecture": arch, "decoder_path": self.layer_path, "depths": self.depths,
             "code_ids": self.codes, "seed": 20261004, "max_input_tokens": 4096,
-            "quantization": "NF4 double quantization / BF16 compute", "thinking": False,
+            "quantization": "NF4 double quantization", "compute_dtype": compute_dtype,
+            "protocol_precision_match": compute_dtype == "bfloat16",
+            "run_purpose": "protocol_smoke" if compute_dtype == "bfloat16" else "T4_FP16_compatibility_only",
+            "thinking": False,
             "gpu": torch.cuda.get_device_name(0),
             "chat_template_sha256": sha(str(getattr(self.processor, "chat_template", None)
                                               or getattr(self.tokenizer, "chat_template", None))),
@@ -163,6 +171,8 @@ class Runner:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", choices=MODELS, default="gemma")
+    ap.add_argument("--compute-dtype", choices=["bfloat16", "float16"], default="bfloat16",
+                    help="float16 is an explicitly non-protocol T4 compatibility run")
     ap.add_argument("--revision", default="main", help="Resolved to immutable HF SHA at run start")
     ap.add_argument("--input", default="examples.jsonl")
     ap.add_argument("--out", default="runs/smoke")
@@ -186,7 +196,9 @@ def main():
                 f.write(json.dumps({"source_id": r["source_id"], **value, "mapping": mapping, "messages": turns}, ensure_ascii=False)+"\n")
         print(f"Validated {len(records)} records; planned {len(plans)} calls. NO model was run.")
         return
-    runner = Runner(MODELS[args.model], args.revision)
+    if args.compute_dtype == "float16" and any(r["study_partition"] != "synthetic" for r in records):
+        raise ValueError("T4/FP16 compatibility mode only permits synthetic fixtures; protocol experiments require BF16")
+    runner = Runner(MODELS[args.model], args.revision, args.compute_dtype)
     # Preflight all selected inputs before model calls; cross-model length
     # eligibility is a separate dataset intake gate, not implied by this check.
     for _, _, _, turns in plans:
