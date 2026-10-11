@@ -41,7 +41,16 @@ def audit(directory):
             require(state.ndim == 1 and bool(torch.isfinite(state).all()), "Invalid state vector")
             dimensions.add(state.numel())
     require(len(dimensions) == 1, "Inconsistent hidden dimensions")
-    result = {"artifact_audit_passed": True, "rows": len(rows), "identity_calls": 2,
+    formatting = {}
+    for mapping in MAPPINGS:
+        group = [r for r in rows if r["mapping"] == mapping]
+        invalid = sum(r["verdict"] == "INVALID" for r in group)
+        formatting[mapping] = {"invalid": invalid, "rows": len(group), "rate": invalid / len(group)}
+    result = {"artifact_audit_passed": True,
+        "prompt_format": config.get("prompt_format", "native"),
+        "protocol_prompt_match": config.get("protocol_prompt_match", True),
+        "invalid_by_mapping": formatting,
+        "synthetic_format_check_passed": all(v["rate"] <= 0.01 for v in formatting.values()), "rows": len(rows), "identity_calls": 2,
         "verdict_counts": dict(Counter(r["verdict"] for r in rows)),
         "input_tokens_min": min(r["input_tokens"] for r in rows),
         "input_tokens_max": max(r["input_tokens"] for r in rows),
