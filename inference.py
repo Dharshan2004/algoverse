@@ -185,9 +185,13 @@ def main():
     ap.add_argument("--out", default="runs/smoke")
     ap.add_argument("--variants", nargs="+", choices=["B", "R", "N", "R2"], default=["B", "R"])
     ap.add_argument("--baseline", choices=["native", "content", "strict"], default="native")
+    ap.add_argument("--format-reminder", action="store_true",
+                    help="Experimental synthetic-only prompt adjustment; not the frozen research prompt")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     records = validate_records([json.loads(s) for s in Path(args.input).read_text().splitlines() if s.strip()])
+    if args.format_reminder and any(r["study_partition"] != "synthetic" for r in records):
+        raise ValueError("Format reminder is an unfrozen diagnostic; synthetic fixtures only")
     outdir = Path(args.out)
     outdir.mkdir(parents=True, exist_ok=False)  # Never mix or overwrite runs.
     plans = []
@@ -195,7 +199,7 @@ def main():
         for v in args.variants:
             value = variant(r["original_response"], v)
             for mapping in MAPPINGS:
-                turns = messages(r["original_prompt"], value["assistant_response"], mapping, args.baseline)
+                turns = messages(r["original_prompt"], value["assistant_response"], mapping, args.baseline, format_reminder=args.format_reminder)
                 plans.append((r, value, mapping, turns))
     if args.dry_run:
         with (outdir/"planned_inputs.jsonl").open("w") as f:
@@ -206,6 +210,8 @@ def main():
     if args.compute_dtype == "float16" and any(r["study_partition"] != "synthetic" for r in records):
         raise ValueError("T4/FP16 compatibility mode only permits synthetic fixtures; protocol experiments require BF16")
     runner = Runner(MODELS[args.model], args.revision, args.compute_dtype)
+    runner.meta.update(prompt_format="reminder_v1" if args.format_reminder else "native",
+                       protocol_prompt_match=not args.format_reminder)
     # Preflight all selected inputs before model calls; cross-model length
     # eligibility is a separate dataset intake gate, not implied by this check.
     for _, _, _, turns in plans:
