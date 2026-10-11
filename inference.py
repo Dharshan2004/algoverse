@@ -32,7 +32,8 @@ class Runner:
         self.processor = (tr.MistralCommonBackend.from_pretrained(model_id, revision=self.revision)
                           if model_id.startswith("mistralai/Ministral") else
                           tr.AutoProcessor.from_pretrained(model_id, revision=self.revision, trust_remote_code=False))
-        self.tokenizer = getattr(self.processor, "tokenizer", self.processor)
+        self.tokenizer = (self.processor if model_id.startswith("mistralai/Ministral")
+                          else self.processor.tokenizer)
         print(f"Loading {arch} at {self.revision} with NF4/{compute_dtype}", flush=True)
         self.model = cls.from_pretrained(model_id, revision=self.revision, trust_remote_code=False,
             device_map={"": 0}, dtype=dtype,
