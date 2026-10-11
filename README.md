@@ -7,7 +7,17 @@
 - [Setup, ownership and remaining checks](SETUP.md)
 - [Inference runner](inference.py) · [Protocol helpers](protocol.py) · [Synthetic examples](examples.jsonl)
 
-## Start
+## T4 compatibility test
+
+Priyadharshan approved T4 testing on 11 October. The notebook defaults to `--compute-dtype float16` for synthetic fixtures only. The CLI still defaults to BF16. FP16 outputs are labeled `T4_FP16_compatibility_only` and cannot be used as validation of the research protocol's BF16 configuration. Actual GPU execution remains pending.
+
+```sh
+python inference.py --model ministral --compute-dtype float16 --out runs/ministral-t4
+# Fresh runtime for the second model:
+python inference.py --model gemma --compute-dtype float16 --out runs/gemma-t4
+```
+
+## Protocol configuration
 
 Use the notebook with a **BF16-capable CUDA GPU**, preferably L4 24 GB or A100. Run one model per fresh runtime. A T4 does not match the protocol's BF16 configuration. No paid runtime is provisioned by this repository.
 
