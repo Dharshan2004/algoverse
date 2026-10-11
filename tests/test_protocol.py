@@ -25,6 +25,19 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(evidence['assistant_response'], '🧪\nbody')
         self.assertEqual(set(evidence), {'assistant_response', 'user_request'})
 
+    def test_format_reminder_preserves_evidence_and_strict_parsing(self):
+        body = '  café\\n"quoted"  '
+        for mapping in ("A_safe", "A_unsafe"):
+            native = messages("request", body, mapping)
+            candidate = messages("request", body, mapping, format_reminder=True)
+            self.assertEqual(candidate[0], native[0])
+            evidence, reminder = candidate[1]["content"].split("\\n\\nOUTPUT FORMAT REMINDER\\n")
+            self.assertEqual(evidence, native[1]["content"])
+            self.assertEqual(json.loads(evidence.split("\\n", 1)[1])["assistant_response"], body)
+            self.assertEqual(reminder, native[0]["content"].split("\\n\\nOUTPUT\\n")[1])
+        for raw in ("thought\\n<channel|>A", "thought\\n<channel|>B"):
+            self.assertEqual(parse(raw), "INVALID")
+
     def test_depths(self):
         self.assertEqual(depths(48), [11, 16, 21, 26, 31, 35])
 
