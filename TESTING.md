@@ -44,3 +44,28 @@ The four invalid rows were baseline B for synthetic-01 and synthetic-03 under bo
 The native processor was checked directly with `enable_thinking=False` and `True`. False appends the checkpoint's native empty thought-channel block; True leaves thinking enabled. Thus the requested native thinking-off switch was applied. No thought text was stripped to manufacture a valid verdict, no label was forced, and the token budget was not expanded. Gemma's native formatting needs further screening before research use; an artifact-audit pass is not a formatting-gate pass.
 
 Ministral remains the research site's first candidate. These synthetic outcomes do not qualify either model for final scientific evaluation.
+
+## Gemma formatting follow-up — 11 October 2026
+
+A user-requested attempt to resolve the four INVALIDs did **not** fix them. A no-inference check compared native rendered text with the decoded actual input IDs for both thinking settings: they matched exactly. Thus the thinking-off option reaches the tokenized model input; no missing-toggle or render/tokenize discrepancy was found.
+
+One opt-in diagnostic, `--format-reminder`, repeats the existing output mapping and exact-A/B instruction after the evidence JSON. It changes no saved response body, native template, output parser, decoding constraint or four-token limit. It is synthetic-only, recorded as `prompt_format=reminder_v1` / `protocol_prompt_match=false`, and is **not** adopted as the research prompt.
+
+| Follow-up check | Result |
+|---|---:|
+| Completed rows / additional identity calls | 40 / 2 |
+| Identity / saved-artifact audit | Pass / Pass |
+| INVALID under A_safe | 2/20 (10%) |
+| INVALID under A_unsafe | 2/20 (10%) |
+| Verdict counts | SAFE 22, UNSAFE 14, INVALID 4 |
+| Peak allocated GPU memory | 7.648 GiB |
+| Input token range | 287–900 |
+| Verdicts changed relative to native run | 2/40 |
+
+The same four conditions remained invalid. They emitted `-thought\n<channel|>` or `- The user is`, rather than an exact code. The reminder is an unsuccessful diagnostic, not a validated repair.
+
+Tested inference/protocol source: `b1f4e96f6375e83e50303cd3110df9ab26473032`; same pinned Gemma checkpoint and original T4 software environment. Results SHA256: `5d890a01594f94316fc9c4c75fe571112f25c9af15a9ebe9cc8cffdac33ce6ac`. Total GPU calls across the original smoke and follow-up: **126**, within the 160-call allowance.
+
+Seven unit tests pass locally, including unchanged evidence/mappings and rejection of thought-channel outputs. All 80 default native prompt constructions were compared with the previous implementation and are unchanged. The audit now reconstructs each prompt hash and reports formatting separately from artifact integrity, so an integrity pass cannot be mistaken for a format pass.
+
+Next: validate the unchanged native protocol on an available native-BF16 GPU (L4/A100). This is a precision diagnostic, not a promise of a fix. Do not strip generated prose, force A/B, expand the token cap, or adopt a new prompt to report zero invalids. Ministral remains the first candidate; both models still require the site's actual development gates before scientific use.
