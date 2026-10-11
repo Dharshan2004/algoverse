@@ -11,7 +11,7 @@
 
 ## T4 compatibility test
 
-Priyadharshan approved T4 testing on 11 October. The notebook defaults to `--compute-dtype float16` for synthetic fixtures only. The CLI still defaults to BF16. FP16 outputs are labeled `T4_FP16_compatibility_only` and cannot be used as validation of the research protocol's BF16 configuration. Both models completed 42-call T4 runs and passed artifact/identity checks. Ministral produced 0/40 INVALID outputs; Gemma produced 4/40. Peak allocated memory was 6.253/7.634 GiB respectively. See [TESTING.md](TESTING.md) for exact revisions, limitations and fixes.
+Priyadharshan approved T4 testing on 11 October. The notebook defaults to `--compute-dtype float16` for synthetic fixtures only. The CLI still defaults to BF16. FP16 outputs are labeled `T4_FP16_compatibility_only` and cannot be used as validation of the research protocol's BF16 configuration. Both models completed 42-call T4 runs and passed artifact/identity checks. Ministral produced 0/40 INVALID outputs; Gemma initially produced 4/40 legacy-parser INVALIDs; its empty native channel wrappers are now handled correctly. A fresh unchanged-prompt 42-call Gemma run passed with 0/40 INVALID and nine unit tests passed. Raw wrappers, length-cap flags and original low A/B mass remain recorded. Peak allocated memory was 6.253/7.634 GiB respectively. See [TESTING.md](TESTING.md) for exact revisions, limitations and fixes.
 
 ```sh
 python inference.py --model ministral --compute-dtype float16 --out runs/ministral-t4
@@ -21,7 +21,7 @@ python inference.py --model gemma --compute-dtype float16 --out runs/gemma-t4
 
 ### Gemma formatting follow-up
 
-The additional 42-call T4 test of an explicit output reminder still produced 4/40 INVALIDs. It is retained only as an opt-in, synthetic-only diagnostic (`--format-reminder`); the default research prompt is unchanged. Both actual tokenized inputs and native thinking-off templates were checked. The audit reports format failure separately from artifact integrity. Total calls so far: 126. See [the follow-up evidence](TESTING.md#gemma-formatting-follow-up--11-october-2026). Native BF16 validation is the next unresolved check; no formatting repair is claimed.
+The issue was in native control-syntax parsing: Gemma's empty channel role header was counted as answer prose. The corrected parser removes only a recognized empty wrapper before checking exact A/B, preserving raw text and scores. The default research prompt and four-token cap are unchanged. The reminder and newline experiments were unsuccessful and are not part of the correction. See [verified evidence](TESTING.md#verified-gemma-parser-correction--11-october-2026) and [the script walkthrough](INFERENCE_GUIDE.md). BF16 and scientific qualification remain pending; cumulative smoke/debug calls are 184.
 
 ## Protocol configuration
 
