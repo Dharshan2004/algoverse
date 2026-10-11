@@ -18,6 +18,10 @@ python inference.py --model ministral --compute-dtype float16 --out runs/ministr
 python inference.py --model gemma --compute-dtype float16 --out runs/gemma-t4
 ```
 
+### Gemma formatting follow-up
+
+The additional 42-call T4 test of an explicit output reminder still produced 4/40 INVALIDs. It is retained only as an opt-in, synthetic-only diagnostic (`--format-reminder`); the default research prompt is unchanged. Both actual tokenized inputs and native thinking-off templates were checked. The audit reports format failure separately from artifact integrity. Total calls so far: 126. See [the follow-up evidence](TESTING.md#gemma-formatting-follow-up--11-october-2026). Native BF16 validation is the next unresolved check; no formatting repair is claimed.
+
 ## Protocol configuration
 
 Use the notebook with a **BF16-capable CUDA GPU**, preferably L4 24 GB or A100. Run one model per fresh runtime. A T4 does not match the protocol's BF16 configuration. No paid runtime is provisioned by this repository.
