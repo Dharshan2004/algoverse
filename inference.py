@@ -6,7 +6,7 @@ import math
 import re
 import time
 from pathlib import Path
-from protocol import MODELS, MAPPINGS, POLICY, depths, messages, parse, sha, validate_records, variant
+from protocol import MODELS, MAPPINGS, POLICY, depths, messages, normalize_native_output, parse, sha, validate_records, variant
 
 class Runner:
     def __init__(self, model_id, revision="main", compute_dtype="bfloat16"):
@@ -64,7 +64,7 @@ class Runner:
             "quantization": "NF4 double quantization", "compute_dtype": compute_dtype,
             "protocol_precision_match": compute_dtype == "bfloat16",
             "run_purpose": "protocol_smoke" if compute_dtype == "bfloat16" else "T4_FP16_compatibility_only",
-            "thinking": False,
+            "thinking": False, "output_parser_version": "native_empty_channel_v1",
             "gpu": torch.cuda.get_device_name(0),
             "chat_template_sha256": sha(str(template)) if template else None,
             "template_backend": type(self.processor).__name__,
@@ -154,7 +154,8 @@ class Runner:
         new_ids = out.sequences[0, length:].tolist()
         raw = self.tokenizer.decode(new_ids, skip_special_tokens=False)
         # Strip only known end-of-turn/EOS/PAD ids at the outside; do not erase
-        # arbitrary special tokens or thought text to manufacture valid verdicts.
+        # arbitrary special tokens or reasoning. A separate narrow normalizer below
+        # recognizes Gemma's empty channel wrapper before strict A/B parsing.
         eos = self.model.generation_config.eos_token_id
         stop_ids = set(eos if isinstance(eos, list) else [eos])
         stop_ids.add(self.model.generation_config.pad_token_id)
@@ -162,11 +163,13 @@ class Runner:
         while cleaned_ids and cleaned_ids[-1] in stop_ids:
             cleaned_ids.pop()
         cleaned = self.tokenizer.decode(cleaned_ids, skip_special_tokens=False)
+        parsed_text, normalization = normalize_native_output(cleaned, self.model_id)
         logp = out.logits[0][0].float().log_softmax(-1)
         if not t.isfinite(logp).all():
             raise RuntimeError("Nonfinite next-token scores")
         scores = {c: float(logp[i]) for c, i in self.codes.items()}
-        return {"raw_output": raw, "parsed_text": cleaned, "output_ids": new_ids,
+        return {"raw_output": raw, "raw_parsed_text": cleaned,
+            "parsed_text": parsed_text, "output_normalization": normalization, "output_ids": new_ids,
             "input_tokens": length, "input_ids_sha256": sha(json.dumps(inputs["input_ids"].tolist())),
             "logp_A": scores["A"], "logp_B": scores["B"],
             "ab_mass": sum(math.exp(v) for v in scores.values()),
