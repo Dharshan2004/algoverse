@@ -20,7 +20,7 @@ Earlier October 4 repo/invitation task was already acted on: your [Slack update]
 ## Decisions and blockers
 
 1. Resolved by Priyadharshan on 11 October: follow the hosted research site as the authoritative protocol. Use `mistralai/Ministral-3-8B-Instruct-2512-BF16` and `google/gemma-4-12B-it`. The earlier meeting-note phrase "two Gemma models" does not require further confirmation. Ministral is the first primary-model candidate; screen both models and apply all protocol qualification gates.
-2. GPU tests have not run in this local environment. Native model loading, template behavior, output tokens, hooks, NF4 memory and finite scores must pass on Colab. A dependency/API failure stops the run; it is not silently replaced with a different model or precision.
+2. Both user-approved Colab T4/FP16 synthetic runs completed: 42 calls/model, identity and saved-artifact audits passed. Ministral had 0/40 INVALID outputs; Gemma had 4/40 thought-channel outputs despite its native thinking-off template. See [TESTING.md](TESTING.md). BF16 protocol execution and Gemma format qualification remain pending; T4 compatibility does not satisfy them.
 3. Synthetic fixtures establish no safety accuracy or causal result. Include actual short/long dataset cases near the 4096-token boundary in the GPU execution audit when eligible source data arrives.
 4. Before development screening, verify each complete input against both tokenizers and the longest approved prompt/variant, source policy compatibility, cluster splits and provenance. This runner checks only the model currently loaded.
 5. Check all saved smoke outputs manually; do not infer success from script completion. Preserve environment locks, model SHAs and the actual measured memory for review.
