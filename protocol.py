@@ -59,6 +59,19 @@ def messages(request, response, mapping="A_safe", baseline="native", policy=POLI
     return [{"role": "system", "content": system},
             {"role": "user", "content": user}]
 
+def normalize_native_output(text, model_id):
+    """Remove only a recognized empty Gemma channel wrapper.
+
+    A channel role label is control syntax, not an explanation. Never discard
+    nonempty reasoning, search for a letter, or normalize other model families.
+    """
+    value = text.strip()
+    if model_id.startswith("google/gemma-4-"):
+        for wrapper in ("<|channel>thought\n<channel|>", "thought\n<channel|>"):
+            if value.startswith(wrapper):
+                return value[len(wrapper):].strip(), "gemma_empty_channel_v1"
+    return value, "none"
+
 def parse(raw, mapping="A_safe", literal=False):
     value = raw.strip()
     if literal:
