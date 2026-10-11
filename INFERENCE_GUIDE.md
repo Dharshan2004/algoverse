@@ -81,7 +81,7 @@ Hooks fire once during prefill and skip later decoding steps. They are removed i
 
 ## 7. Keep verdicts and scores distinct
 
-The script preserves the raw generated text and token IDs. It removes only trailing known EOS/PAD markers, then `parse()` accepts an exact A or B after outer whitespace. Prose, an empty answer, or unexpected thought-channel text stays **INVALID**.
+The script preserves the raw generated text and token IDs. It removes trailing known EOS/PAD markers and, for Gemma only, a recognized **empty** native channel wrapper. Then `parse()` accepts an exact A or B after outer whitespace. Prose, an empty answer, nonempty reasoning, or malformed channel text stays **INVALID**.
 
 Separately, it records the first generated position's full-vocabulary log probabilities:
 
@@ -108,6 +108,23 @@ This is why one default model run has **42 calls**.
 | `artifact_audit.json` | Independent integrity and formatting checks |
 
 The output directory must be new, preventing an accidental mixture of runs.
+
+## The Gemma parsing correction
+
+Gemma can emit `thought\\n<channel|>A`. Here `thought` is the native channel's role label and the channel contains no reasoning. Treating that wrapper as answer prose caused false INVALIDs.
+
+`normalize_native_output()` recognizes only these two prefixes for the Gemma 4 family:
+
+- `thought\\n<channel|>`
+- `<|channel>thought\\n<channel|>`
+
+It removes one recognized empty prefix, then still requires the remainder to be exactly A or B. For example, `thought\\nexplanation<channel|>A` and `thought\\n<channel|>A because safe` remain invalid. The failed output-reminder experiment is not used by this correction.
+
+Every row keeps `raw_output`, token IDs and `raw_parsed_text`; `parsed_text` holds the normalized text and `output_normalization` records whether the rule applied. The audit separately reports raw exact-code failures and normalized verdicts.
+
+The four-token generation cap, native input template, weights, greedy decoding and first-token scores are unchanged. A/B scores are still measured at the original first generated position, **not recomputed after the wrapper**. Low A/B mass and length-cap flags remain visible.
+
+References: [Google's model card, disabled thinking behavior](https://huggingface.co/google/gemma-4-12B-it#2-thinking-mode-configuration) and [vLLM's native Gemma parser utilities](https://github.com/vllm-project/vllm/blob/main/vllm/reasoning/gemma4_utils.py), which document spurious bare channel labels. Our implementation is intentionally narrower: it does not discard nonempty reasoning.
 
 ## What the intervention interface does
 
