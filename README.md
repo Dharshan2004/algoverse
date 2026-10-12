@@ -1,63 +1,147 @@
 # Algoverse: refusal wording and safety judgments
 
-**TLDR:** Colab step-zero inference setup for Priyadharshan's October 8 assignment. Builds exact response variants, runs native judging under both output mappings, saves raw verdicts/log probabilities and six boundary-token activations. Includes a reusable prefill-only intervention interface for the interpretability workstream. T4/FP16 synthetic smoke execution is verified; BF16 protocol validation remains pending.
+Inference tooling for a study of how refusal wording changes an LLM judge's safety decisions when the underlying response stays the same. The runner judges saved prompt–response pairs, records output probabilities, and captures internal activations for the team's interpretability work.
 
-- [Open the Colab notebook](https://colab.research.google.com/github/Dharshan2004/algoverse/blob/dharshan/inference-setup/notebooks/step_zero.ipynb)
-- [Research protocol](https://refusal-wording-safety-judgments.dharshanlab.chatgpt.site/)
-- [Setup, ownership and remaining checks](SETUP.md)
-- [T4 test results and limitations](TESTING.md)
-- [How the inference scripts work](INFERENCE_GUIDE.md)
-- [Inference runner](inference.py) · [Protocol helpers](protocol.py) · [Synthetic examples](examples.jsonl)
+**Current status:** initial inference setup with recorded synthetic smoke tests on both models. This repository does not yet establish benchmark accuracy, a causal refusal mechanism, or readiness for final evaluation. Native BF16 execution and the development-data qualification gates remain pending.
 
-## T4 compatibility test
+[Open in Google Colab](https://colab.research.google.com/github/Dharshan2004/algoverse/blob/main/notebooks/step_zero.ipynb) · [Research protocol](https://refusal-wording-safety-judgments.dharshanlab.chatgpt.site/) · [Pipeline walkthrough](INFERENCE_GUIDE.md) · [Test evidence](TESTING.md) · [Team handoff](SETUP.md)
 
-Priyadharshan approved T4 testing on 11 October. The notebook defaults to `--compute-dtype float16` for synthetic fixtures only. The CLI still defaults to BF16. FP16 outputs are labeled `T4_FP16_compatibility_only` and cannot be used as validation of the research protocol's BF16 configuration. Both models completed 42-call T4 runs and passed artifact/identity checks. Ministral produced 0/40 INVALID outputs; Gemma initially produced 4/40 legacy-parser INVALIDs; its empty native channel wrappers are now handled correctly. A fresh unchanged-prompt 42-call Gemma run passed with 0/40 INVALID and nine unit tests passed. Raw wrappers, length-cap flags and original low A/B mass remain recorded. Peak allocated memory was 6.253/7.634 GiB respectively. See [TESTING.md](TESTING.md) for exact revisions, limitations and fixes.
+## What this repository provides
+
+- Two model adapters: Ministral 3 8B and Gemma 4 12B, using native chat templates and 4-bit NF4 weights.
+- Four response conditions: original body (`B`), refusal prefix (`R`), neutral prefix (`N`), and alternate refusal prefix (`R2`). The original body is preserved byte-for-byte.
+- Both output mappings: A = SAFE / B = UNSAFE, and A = UNSAFE / B = SAFE.
+- Raw generated text and token IDs, strict verdict parsing, full-vocabulary first-token A/B log probabilities, and a semantic score margin.
+- Six decoder activation vectors at the last input token, with identity checks and an independent saved-artifact audit.
+- A Python intervention interface for subsequent interpretability work. Nonidentity interventions still require validation.
+
+The judge evaluates an existing response; it is not asked to fulfil the saved request. No model training happens in this runner.
+
+## Quick start
+
+### Google Colab
+
+1. Open the notebook above and select a GPU runtime.
+2. Run the checkout and dependency cells. If model access requires authentication, use Colab Secrets with the name `HF_TOKEN` and complete the provider's access agreement.
+3. Run the unit tests and offline input plan.
+4. Run `MODEL = "ministral"`, inspect the audit and outputs, and download the artifact archive.
+5. Start a fresh runtime for `MODEL = "gemma"` and repeat.
+
+The notebook defaults to **FP16 on a T4 for synthetic compatibility testing**. The command-line runner defaults to **BF16**, which requires a GPU with native BF16 support. Set the notebook's `COMPUTE_DTYPE` to `"bfloat16"` for that configuration; its successful execution would still need the research qualification checks below.
+
+Each default model run uses ten synthetic records × two variants × two mappings = **40 judging calls**, plus **two identity-check calls**. Use a new output directory for every run. The runner refuses to overwrite an existing directory.
+
+### Local checks without a GPU
+
+These commands need Python 3 and its standard library. They do not download models or make inference calls.
 
 ```sh
-python inference.py --model ministral --compute-dtype float16 --out runs/ministral-t4
-# Fresh runtime for the second model:
-python inference.py --model gemma --compute-dtype float16 --out runs/gemma-t4
-```
-
-### Gemma formatting follow-up
-
-The issue was in native control-syntax parsing: Gemma's empty channel role header was counted as answer prose. The corrected parser removes only a recognized empty wrapper before checking exact A/B, preserving raw text and scores. The default research prompt and four-token cap are unchanged. The reminder and newline experiments were unsuccessful and are not part of the correction. See [verified evidence](TESTING.md#verified-gemma-parser-correction--11-october-2026) and [the script walkthrough](INFERENCE_GUIDE.md). BF16 and scientific qualification remain pending; cumulative smoke/debug calls are 184.
-
-## Protocol configuration
-
-Use the notebook with a **BF16-capable CUDA GPU**, preferably L4 24 GB or A100. Run one model per fresh runtime. A T4 does not match the protocol's BF16 configuration. No paid runtime is provisioned by this repository.
-
-The notebook installs current official dependencies for an initial compatibility smoke test, records installed versions and resolves each model to an immutable Hugging Face commit. Save that environment lock and use it for later runs; a moving dependency install is not a frozen final experiment.
-
-Offline, without downloading weights:
-
-```sh
+git clone https://github.com/Dharshan2004/algoverse.git
+cd algoverse
 python -m unittest discover -s tests -v
 python inference.py --dry-run --variants B R N R2 --out runs/planned
 ```
 
-On Colab after dependency installation:
+The dry run validates the ten fixtures and writes **80 planned inputs**. It checks prompt construction, not GPU execution or tokenizer length limits.
+
+### GPU execution
+
+Use the Colab notebook for dependency installation and environment capture. It installs the inference packages and saves an environment lock; the recorded test versions and checkpoint revisions are in [TESTING.md](TESTING.md). Use the saved lock and checkpoint revision when reproducing a run, rather than assuming a fresh dependency installation is identical.
+
+For a synthetic T4 compatibility run:
 
 ```sh
-python inference.py --model gemma --variants B R N R2 --out runs/gemma-smoke
-# Restart runtime before loading the other checkpoint.
-python inference.py --model ministral --variants B R N R2 --out runs/ministral-smoke
+python inference.py --model ministral --compute-dtype float16 --out runs/ministral-t4
+python audit_smoke.py runs/ministral-t4
 ```
 
-Ten illustrative records × four variants × two mappings = 80 calls/model, plus two identity checks. This full variant plumbing test across both models would use 164 calls, exceeding the protocol's 160-call smoke allowance by four. **The notebook defaults to B/R only (42/model; 84 total)**. Additional variants/baselines require an explicit budget review before running. Offline dry runs do not consume inference calls.
+For a BF16 smoke run on a compatible CUDA GPU:
 
-## Scope
+```sh
+python inference.py --model gemma --compute-dtype bfloat16 --out runs/gemma-bf16
+python audit_smoke.py runs/gemma-bf16
+```
 
-Implemented: B/R/N/R2 construction with byte offsets and hashes, both A/B mappings, native/content-focused/strict prompts, strict output parsing, NF4/BF16 loading, greedy decoding, immutable checkpoint resolution, complete-input length rejection, CPU boundary states, identity reproducibility checks, run metadata, and raw JSONL outputs. `Runner.run` also supports generation with `max_new_tokens=256` and optional identity/removal/addition/coordinate-replacement hooks. A hook fires only once during prefill. It does not select or validate a refusal direction.
+`audit_smoke.py` audits the default ten-record, B/R, two-mapping synthetic run. Custom datasets and expanded variant runs need corresponding review; they are not covered by that default audit.
 
-Not implemented here: dataset acquisition/grouping, human label audit, direction estimation and behavioral validation, Shieldstral scoring, final locked-run orchestration, full control matrix, literal-label sequence scoring, or statistical analysis. Those remain separate workstreams/integration tasks. This is an inference foundation, not a completed experiment. `messages(..., literal=True)` constructs a literal prompt, but primary runner scoring is A/B only.
+## Configuration
 
-## Outputs
+| Option | Default | Purpose |
+|---|---|---|
+| `--model` | `gemma` | Choose `gemma` or `ministral`. |
+| `--compute-dtype` | `bfloat16` | Compute precision; `float16` only accepts synthetic fixtures. |
+| `--revision` | `main` | Hugging Face model revision, resolved to an immutable SHA at startup. |
+| `--input` | `examples.jsonl` | JSONL input records. |
+| `--out` | `runs/smoke` | A new directory for this run's artifacts. |
+| `--variants` | `B R` | Any selection of `B R N R2`. |
+| `--baseline` | `native` | `native`, `content`, or `strict` judging instruction. |
+| `--dry-run` | Off | Write planned prompts without loading a model. |
 
-`run_config.json`, `identity_check.json`, `results.jsonl`, and `states_*.pt` under a new run directory. Every row retains raw output, mapped verdict, A/B full-vocabulary log probabilities and combined mass, semantic margin, model revision, template input hash, prompt hash, original-body hash, timing, memory and source IDs. Invalid output stays INVALID. Run outputs are ignored by git and should be kept in private working storage.
+`--format-reminder` is a synthetic-only diagnostic from an unsuccessful formatting experiment. It is not the adopted research prompt. Expanding variants or baselines increases inference calls: all four variants on both models require 164 calls including identity checks, exceeding the original 160-call initial smoke allowance. Plan additional runs explicitly.
 
-The ten examples are synthetic placeholders, not human-annotated benchmark data. Their provisional labels test the schema only. Real development input must be normalized by Sabika's pipeline and include `label_provenance: "human"`; this runner deliberately rejects final-test partitions. The primary rubric is the site's operational paraphrase and still needs reconciliation with released source annotation rules before a scientific screen.
+## Input and output contract
 
-## Collaboration
+Each input line is a JSON object with these required fields:
 
-Use separate branches and pull requests. Include a TLDR, validation evidence and blockers in each handoff. Do not commit tokens, gated source text, model weights or output archives. Team invites were reported sent on October 4; invitation acceptance has not been verified here.
+| Field | Meaning |
+|---|---|
+| `source_id` | Unique record ID. |
+| `cluster_id` | ID connecting related examples. |
+| `original_prompt` | Saved user request. |
+| `original_response` | Saved assistant response, preserved across variants. |
+| `study_partition` | `synthetic` or `development`; final-test records are rejected. |
+| `mapped_unsafe` | Boolean label metadata, never inserted into the judge prompt. |
+| `label_provenance` | Must be `human` for development records. |
+
+See [examples.jsonl](examples.jsonl) for the schema. Its labels are illustrative fixtures, not human-validated benchmark labels. Development data additionally needs the source-policy, provenance, split, and cross-model length checks described in [SETUP.md](SETUP.md).
+
+| Artifact | Contents |
+|---|---|
+| `planned_inputs.jsonl` | Constructed prompts, only for dry runs. |
+| `run_config.json` | Resolved model revision, environment, precision, prompt and run metadata. |
+| `identity_check.json` | Native versus identity-intervention agreement. |
+| `results.jsonl` | One row per condition with raw output, verdict, scores, hashes, timing and memory. |
+| `states_00000.pt`, etc. | One dictionary of six CPU activation vectors per judging row. |
+| `artifact_audit.json` | Results of running the separate synthetic smoke audit. |
+
+Keep raw datasets, generated outputs, model weights, tokens and environment secrets out of Git. The notebook packages artifacts for private download; download them before the temporary runtime expires.
+
+## What has been validated
+
+The recorded 11 October tests used Tesla T4, NF4 weights and FP16 compute:
+
+| Recorded result | Ministral 3 8B | Gemma 4 12B, corrected parser |
+|---|---:|---:|
+| Judging rows plus identity calls | 40 + 2 | 40 + 2 |
+| Normalized INVALID verdicts | 0/40 | 0/40 |
+| Identity and artifact checks | Pass | Pass |
+| Peak allocated GPU memory | 6.253 GiB | 7.634 GiB |
+
+Gemma's correction removes only a recognized empty native channel wrapper before exact A/B parsing. Four raw wrappers and length-cap flags remain recorded. Their low first-token A/B probability mass remains visible: valid parsing does not establish confident classification. Nine protocol regression tests passed in the recorded corrected run.
+
+[TESTING.md](TESTING.md) preserves the chronological evidence, failed diagnostics, exact revisions and result hashes. Those GPU tests are historical evidence, not a fresh GPU rerun accompanying every documentation change.
+
+## Remaining work before research evaluation
+
+- Validate the BF16 configuration and actual development examples, including inputs near the 4,096-token limit.
+- Reconcile the rubric with source annotation rules; audit human labels, provenance and cluster splits.
+- Check complete-input eligibility with both tokenizers and the longest approved prompt/variant.
+- Validate nonidentity edits, model-specific refusal directions and behavioral controls.
+- Integrate evaluation metrics, remaining controls and statistical analysis; satisfy the protocol's power and freeze gates before final evaluation.
+
+The runner provides an inference foundation. Dataset acquisition, probe training, Shieldstral scoring, literal-label sequence scoring, the complete control matrix and final-run orchestration are outside this initial implementation.
+
+## Repository map and collaboration
+
+| File | Responsibility |
+|---|---|
+| [protocol.py](protocol.py) | Input validation, variants, judging messages and parsing. |
+| [inference.py](inference.py) | Model loading, execution, activation capture and output writing. |
+| [audit_smoke.py](audit_smoke.py) | Independent audit of the default synthetic smoke artifacts. |
+| [notebooks/step_zero.ipynb](notebooks/step_zero.ipynb) | Colab setup, execution and artifact download. |
+| [tests/test_protocol.py](tests/test_protocol.py) | Offline protocol regression checks. |
+| [INFERENCE_GUIDE.md](INFERENCE_GUIDE.md) | Detailed pipeline and score interpretation. |
+| [SETUP.md](SETUP.md) | Assignment, ownership, integration checklist and pending work. |
+| [TESTING.md](TESTING.md) | Recorded test results and reproduction details. |
+
+Use separate branches and pull requests with a short description, validation evidence and remaining limitations. Priyadharshan owns inference setup; Sabika owns dataset preparation; Mehrage owns interpretability; Hemanya and Laasya own evaluation metrics. Pratham provides research guidance and review. See the handoff for the October 8 assignment and the distinction between repository integration and scientific approval.

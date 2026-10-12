@@ -47,3 +47,20 @@ Circleback calls the dataset "JailBench"; the hosted protocol specifically uses 
 - Coordinate the normalized input schema with Sabika and the `Runner.run(..., edit=...)` interface with Mehrage.
 
 Training vectors must be model-specific and come from independent approved partitions. A donor must match the response family, model revision, output mapping, rubric, layer and token position. The low-level operator cannot establish those provenance facts by itself; callers must validate them before edited research runs.
+
+## Repository integration decision — 12 October 2026
+
+The repository owner authorized merging this initial inference setup after checking the October 8 Circleback assignment. That assignment requested two-model inference scripts, proposal scenarios, hypothetical examples and a GitHub handoff for Pratham to review. Integration is scoped to that foundation; it does not mark the research validation gates complete.
+
+No submitted GitHub review was present when this handoff was prepared. Pratham's research review remains pending; owner authorization to integrate is not mentor approval. Existing GPU evidence is documented in TESTING.md; no new GPU run is claimed for this documentation update. The README and Colab launcher target `main` for use after integration.
+
+### Follow-up checklist
+
+- [ ] Pratham: review the inference setup and its assumptions.
+- [ ] Priyadharshan: validate native BF16 execution and short/near-limit development inputs.
+- [ ] Priyadharshan and Sabika: agree on input schema, source rubric, human-label provenance, cluster splits and cross-model token limits.
+- [ ] Priyadharshan and Mehrage: validate nonidentity operators and model-specific direction/donor provenance before intervention experiments.
+- [ ] Hemanya and Laasya: integrate evaluation metrics and required controls.
+- [ ] Team: complete protocol qualification, power and freeze checks before final evaluation.
+
+These are open handoff items, not newly completed experiments or confirmations from the named team members.

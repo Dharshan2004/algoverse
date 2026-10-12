@@ -109,3 +109,9 @@ A separate 16-call boundary diagnostic reproduced four legacy-parser INVALIDs in
 - Corrected Colab bundle: `gemma-corrected-smoke.zip`, containing raw rows, state vectors, configuration, audit, comparison, source archive, environment and logs. Download it from the notebook before its temporary runtime expires.
 
 BF16 execution, actual development-data gates and the remaining scientific controls are still pending. See [INFERENCE_GUIDE.md](INFERENCE_GUIDE.md) for the pipeline explanation.
+
+## Documentation and integration checks — 12 October 2026
+
+At source revision `d71be31d99f1396409889e4da670e58bc62be339`, the documentation update passed all nine offline protocol tests and generated 80 planned inputs from the ten synthetic fixtures with all four variants and both mappings. The notebook JSON, ordinary Python cells and local documentation links were also checked. No GPU inference was rerun.
+
+The README now documents startup, CLI defaults, input/output contracts, recorded evidence and pending research gates. The Colab checkout and repository links use `main` for the integrated version. SETUP.md records owner-authorized integration and the still-pending mentor review and validation work. GitHub reported no attached CI checks before integration; offline checks above are not a CI or scientific qualification claim.
