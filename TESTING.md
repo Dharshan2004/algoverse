@@ -1,3 +1,13 @@
+# Latest validation — 17 October 2026
+
+The [50-record exploratory pilot](reports/pilot-2026-10-17/README.md) completed on both models with BF16 on an NVIDIA L4. Each has 400 judgments plus two passing identity calls. Both local audits passed condition completeness, source/body preservation, prompt hashes, checkpoint consistency, verdict parsing, score arithmetic, and six finite activation vectors in every saved state file. Ministral has 0/400 invalids; Gemma has 10/400. Runtime success and artifact integrity do not qualify the dataset or establish a causal result.
+
+All 12 protocol/pilot unit tests and all 14 existing team metrics tests pass. The new launcher was separately dry-run validated for 400 planned conditions per model; the actual GPU run used the bundled existing inference script. The clean notebook was parsed and checked for absent outputs. Raw artifacts remain ignored; aggregate results are committed separately from them.
+
+Earlier dated sections below retain their historical scope; their statements that BF16 was pending describe those earlier runs.
+
+---
+
 # T4 compatibility test — 11 October 2026
 
 **Latest:** the native Gemma parser is corrected and freshly verified at **0/40 INVALID**, with four raw empty-channel wrappers retained. See [the verified correction](#verified-gemma-parser-correction--11-october-2026). Earlier results below document the legacy parser and unsuccessful prompt diagnostic.

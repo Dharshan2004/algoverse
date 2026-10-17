@@ -2,7 +2,7 @@
 
 Inference tooling for a study of how refusal wording changes an LLM judge's safety decisions when the underlying response stays the same. The runner judges saved prompt–response pairs, records output probabilities, and captures internal activations for the team's interpretability work.
 
-**Current status:** initial inference setup with recorded synthetic smoke tests on both models. This repository does not yet establish benchmark accuracy, a causal refusal mechanism, or readiness for final evaluation. Native BF16 execution and the development-data qualification gates remain pending.
+**Current status:** [50-record exploratory pilot completed](reports/pilot-2026-10-17/README.md) on both models using native BF16 on an L4: 800 judgments plus four identity checks, with full saved-artifact audits passed. Source-data qualification and scientific development gates remain open. These results do not establish benchmark accuracy, a causal refusal mechanism, or readiness for final evaluation.
 
 [Open in Google Colab](https://colab.research.google.com/github/Dharshan2004/algoverse/blob/main/notebooks/step_zero.ipynb) · [Research protocol](https://refusal-wording-safety-judgments.dharshanlab.chatgpt.site/) · [Pipeline walkthrough](INFERENCE_GUIDE.md) · [Test evidence](TESTING.md) · [Team handoff](SETUP.md)
 
@@ -18,6 +18,8 @@ Inference tooling for a study of how refusal wording changes an LLM judge's safe
 The judge evaluates an existing response; it is not asked to fulfil the saved request. No model training happens in this runner.
 
 ## Quick start
+
+For actual development-data runs, use the [exploratory pilot workflow](PILOT.md). It runs all four variants on both models and provides a separate artifact audit and aggregate report. Dry runs only construct inputs; they do not produce model judgments.
 
 ### Google Colab
 

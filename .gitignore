@@ -9,3 +9,8 @@ data/
 *.safetensors
 *.bin
 .ipynb_checkpoints/
+candidate_inputs.jsonl
+reviewer_packet.jsonl
+results.jsonl
+planned_inputs.jsonl
+*.zip
