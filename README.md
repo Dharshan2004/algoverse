@@ -6,6 +6,8 @@ Inference tooling for a study of how refusal wording changes an LLM judge's safe
 
 [Open in Google Colab](https://colab.research.google.com/github/Dharshan2004/algoverse/blob/main/notebooks/step_zero.ipynb) · [Research protocol](https://refusal-wording-safety-judgments.dharshanlab.chatgpt.site/) · [Pipeline walkthrough](INFERENCE_GUIDE.md) · [Test evidence](TESTING.md) · [Team handoff](SETUP.md)
 
+[Animated code and results walkthrough](media/pilot-explainer/README.md) · [Notebook and run history](notebooks/README.md)
+
 ## What this repository provides
 
 - Two model adapters: Ministral 3 8B and Gemma 4 12B, using native chat templates and 4-bit NF4 weights.

@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-17",
+  "pilot_original_sha256": "aca432a230e0bef57d0c496209a55b75f15fd1cb1455d16c11c70d4ae0f3927d",
+  "pilot_original_execution_counts": [
+    null,
+    1,
+    2
+  ],
+  "payload_files": {
+    "inference.py": "247a8880a24fad39cfcc6b05307cd8a861cf21fa2fc0589b4eede3d492f83e4c",
+    "protocol.py": "1c1ddce723d040028fca3c174ac806bd3066ee9e192fe2a0b727de8a1255a956",
+    "summarize_pilot.py": "f96aec5eee17e1d004f7d6e9d77531472d7cc627fb34f2c9ac7cf3180c1298f4",
+    "candidate_inputs.jsonl": "ae4f5d179571f290910c688ea59e68dae3110a74eebadd1810bfcaf91deda311",
+    "qualification.json": "ea5500d3ba3c70af07fbd7d349dff29438bee327a61e3377a5ec039b9d34307e"
+  },
+  "sanitization": "Removed embedded payload, all output cells and runtime metadata. Added private archive loading instruction; execution counts reset because setup changed. Execution evidence is retained separately in audited reports and private original.",
+  "qualification_original_sha256": "859bf1822530439c3f778c420c3f173db12b9df89b4c6f5a0f566858ac4bf16e",
+  "qualification_original_execution_counts": [
+    null,
+    1,
+    2
+  ],
+  "qualification_helpers": {
+    "audit_sample.py": "42f70976213fa88a5a41c1128eaec935ede03929a5b0a288ad092310405b3d01",
+    "token_check.py": "abd0f09fbcdda09efd149df8c413eab6319505705b6190ed7557771b1120b11c",
+    "prepare_review.py": "c8606b2f09b0a6096cdf283bd45021b446a0bb71044c3b950f7c6fa6160468ac"
+  },
+  "original_pilot_summarizer_sha256": "f96aec5eee17e1d004f7d6e9d77531472d7cc627fb34f2c9ac7cf3180c1298f4"
+}
