@@ -23,7 +23,7 @@ The judge evaluates an existing response; it is not asked to fulfil the saved re
 
 For Sabika’s source-data pipeline, see [Dataset preparation](DATASET_PREPARATION.md).
 
-For actual development-data runs, use the [exploratory pilot workflow](PILOT.md). It runs all four variants on both models and provides a separate artifact audit and aggregate report. Dry runs only construct inputs; they do not produce model judgments.
+For actual development-data runs, use the [exploratory pilot workflow](PILOT.md) and [open its clean notebook in Colab](https://colab.research.google.com/github/Dharshan2004/algoverse/blob/codex/pilot-dataset-integration/notebooks/pilot.ipynb). It runs all four variants on both models and provides a separate artifact audit and aggregate report. Dry runs only construct inputs; they do not produce model judgments.
 
 ### Google Colab
 
