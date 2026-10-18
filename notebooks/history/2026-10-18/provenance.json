@@ -1,0 +1,19 @@
+{
+  "original_sha256": "16885c26ef98e1f991782bd492c56af14470eae411325ac68c9403781c19fa30",
+  "snapshot_sha256": "6e8fb2bdc68c16e0436747f58a16eb44f8b8b8124170a5972f8b9524b9a77e27",
+  "execution_counts": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "code_cells_unchanged": true,
+  "sanitization": [
+    "Removed runtime and cell metadata",
+    "Removed upload and download display_data HTML",
+    "Removed verbose inference cell stdout",
+    "Retained original setup, input verification and final aggregate stdout",
+    "Added explicit provenance Markdown header"
+  ],
+  "report": "../../../reports/gemma-ab-v1-2026-10-18/README.md"
+}

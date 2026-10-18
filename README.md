@@ -2,9 +2,15 @@
 
 Inference tooling for a study of how refusal wording changes an LLM judge's safety decisions when the underlying response stays the same. The runner judges saved prompt–response pairs, records output probabilities, and captures internal activations for the team's interpretability work.
 
-**Current status:** initial inference setup with recorded synthetic smoke tests on both models. This repository does not yet establish benchmark accuracy, a causal refusal mechanism, or readiness for final evaluation. Native BF16 execution and the development-data qualification gates remain pending.
+**Current status:** [50-record exploratory pilot completed](reports/pilot-2026-10-17/README.md) on both models using native BF16 on an L4: 800 judgments plus four identity checks, with full saved-artifact audits passed. Source-data qualification and scientific development gates remain open. These results do not establish benchmark accuracy, a causal refusal mechanism, or readiness for final evaluation.
+
+**18 October follow-up:** [Gemma A/B-constrained comparison](reports/gemma-ab-v1-2026-10-18/README.md) completed 928 judgments plus eight identity checks. Output validity improved to 100%, but dataset label agreement changed only 84.75% → 85.00%, and clean-control accuracy fell 98.44% → 93.75%. The original pilot and ten INVALIDs remain intact. See the [frozen protocol](AB_PROTOCOL.md) and [reproduction guide](AB_REPRODUCTION.md).
 
 [Open in Google Colab](https://colab.research.google.com/github/Dharshan2004/algoverse/blob/main/notebooks/step_zero.ipynb) · [Research protocol](https://refusal-wording-safety-judgments.dharshanlab.chatgpt.site/) · [Pipeline walkthrough](INFERENCE_GUIDE.md) · [Test evidence](TESTING.md) · [Team handoff](SETUP.md)
+
+[Animated code and results walkthrough](media/pilot-explainer/README.md) · [Notebook and run history](notebooks/README.md)
+
+**Case-review update:** [Both robust Gemma flips need source/policy adjudication](reports/gemma-case-review-2026-10-18/README.md). One is an unfinished request continuation and the other fictional narrative. Setting them aside in a post-hoc sensitivity check reverses the net refusal effect; scaling remains on hold pending original-source reconciliation and human review.
 
 ## What this repository provides
 
@@ -18,6 +24,10 @@ Inference tooling for a study of how refusal wording changes an LLM judge's safe
 The judge evaluates an existing response; it is not asked to fulfil the saved request. No model training happens in this runner.
 
 ## Quick start
+
+For Sabika’s source-data pipeline, see [Dataset preparation](DATASET_PREPARATION.md).
+
+For actual development-data runs, use the [exploratory pilot workflow](PILOT.md) and [open its clean notebook in Colab](https://colab.research.google.com/github/Dharshan2004/algoverse/blob/main/notebooks/pilot.ipynb). It runs all four variants on both models and provides a separate artifact audit and aggregate report. Dry runs only construct inputs; they do not produce model judgments.
 
 ### Google Colab
 
@@ -33,11 +43,12 @@ Each default model run uses ten synthetic records × two variants × two mapping
 
 ### Local checks without a GPU
 
-These commands need Python 3 and its standard library. They do not download models or make inference calls.
+These commands need Python 3 and the analysis dependencies below. They do not download models or make inference calls.
 
 ```sh
 git clone https://github.com/Dharshan2004/algoverse.git
 cd algoverse
+python -m pip install -r requirements-analysis.txt
 python -m unittest discover -s tests -v
 python inference.py --dry-run --variants B R N R2 --out runs/planned
 ```

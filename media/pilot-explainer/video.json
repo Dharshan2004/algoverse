@@ -1,0 +1,24 @@
+{
+  "duration_seconds": 191.45,
+  "scene_seconds": [
+    15.6,
+    21.7,
+    18.1,
+    23.45,
+    24.35,
+    20.35,
+    18.4,
+    24.3,
+    25.2
+  ],
+  "resolution": [
+    1280,
+    720
+  ],
+  "fps": 20,
+  "narration": "macOS Samantha synthetic voice",
+  "result_sources": [
+    "reports/pilot-2026-10-17/ministral/summary.json",
+    "reports/pilot-2026-10-17/gemma/summary.json"
+  ]
+}

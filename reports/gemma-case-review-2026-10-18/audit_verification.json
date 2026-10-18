@@ -1,0 +1,25 @@
+{
+  "status": "passed",
+  "stronger_audit_checks": [
+    "Approved model/checkpoint pair",
+    "Exactly one indexed activation path per judgment",
+    "No missing, extra or aliased activation paths",
+    "All original tensor-content checks"
+  ],
+  "new_comparison_equal_to_preserved_summary": true,
+  "activation_files_checked": 1728,
+  "original_ministral_audit": {
+    "rows": 400,
+    "identity_calls": 2,
+    "conditions_and_metadata_pass": true,
+    "activation_contents_checked": true,
+    "activation_contents_pass": true,
+    "input_sha256": "ae4f5d179571f290910c688ea59e68dae3110a74eebadd1810bfcaf91deda311",
+    "results_sha256": "1e4ff83319d7dbb4f167a8632471102a3da4153529b79097f013b813168d6b92"
+  },
+  "original_gemma_invalids": 10,
+  "diagnostic_pattern_count_sum": 10,
+  "auditor_sha256": "5a54aa09ede640c5648825a59d3bec34688c06f0423fd70fc37b1d17f0f4648b",
+  "diagnostic_sha256": "d3983782e6ea9850622d6a517e5859f72856e831d1ffe0bcdb833e40e6e0be42",
+  "source_note": "Historical experiment source remains unchanged at 20450d8; this is a separate audit of saved artifacts, not rerun inference."
+}

@@ -1,3 +1,13 @@
+# Latest validation — 17 October 2026
+
+The [50-record exploratory pilot](reports/pilot-2026-10-17/README.md) completed on both models with BF16 on an NVIDIA L4. Each has 400 judgments plus two passing identity calls. Both local audits passed condition completeness, source/body preservation, prompt hashes, checkpoint consistency, verdict parsing, score arithmetic, and six finite activation vectors in every saved state file. Ministral has 0/400 invalids; Gemma has 10/400. Runtime success and artifact integrity do not qualify the dataset or establish a causal result.
+
+All 12 protocol/pilot unit tests and all 14 existing team metrics tests pass. The new launcher was separately dry-run validated for 400 planned conditions per model; the actual GPU run used the bundled existing inference script. The clean notebook was parsed and checked for absent outputs. Raw artifacts remain ignored; aggregate results are committed separately from them.
+
+Earlier dated sections below retain their historical scope; their statements that BF16 was pending describe those earlier runs.
+
+---
+
 # T4 compatibility test — 11 October 2026
 
 **Latest:** the native Gemma parser is corrected and freshly verified at **0/40 INVALID**, with four raw empty-channel wrappers retained. See [the verified correction](#verified-gemma-parser-correction--11-october-2026). Earlier results below document the legacy parser and unsuccessful prompt diagnostic.
@@ -115,3 +125,21 @@ BF16 execution, actual development-data gates and the remaining scientific contr
 At source revision `d71be31d99f1396409889e4da670e58bc62be339`, the documentation update passed all nine offline protocol tests and generated 80 planned inputs from the ten synthetic fixtures with all four variants and both mappings. The notebook JSON, ordinary Python cells and local documentation links were also checked. No GPU inference was rerun.
 
 The README now documents startup, CLI defaults, input/output contracts, recorded evidence and pending research gates. The Colab checkout and repository links use `main` for the integrated version. SETUP.md records owner-authorized integration and the still-pending mentor review and validation work. GitHub reported no attached CI checks before integration; offline checks above are not a CI or scientific qualification claim.
+
+## Verified constrained-output comparison — 18 October 2026
+
+Based on PR #3 commit `03b32cb2ac6ae6aabf67a6b2da7632c3de852834`, implementation `20450d80a88942388342cc7440f7b58d9ea36a54` ran in Chrome/Colab on NVIDIA L4 with the pinned Gemma revision, BF16/NF4 and unchanged prompts. The separately versioned `ab_constrained_v1` masks generation to one A/B token; `native_v1` retains four tokens.
+
+All 50 records × four variants × two mappings were run under each protocol, plus eight authored clean controls with the same coverage: 928 judgments plus eight passing identity calls. All four saved-artifact audits passed remotely and independently locally, including 928 activation files. The original 400-row Gemma pilot was audited again and all 817 original pilot files retained their pre-run hashes. Native rerun verdicts and first-position A/B scores exactly reproduced the original; native/constrained prefill states and scores matched in all 464 pairs.
+
+Formatting: 390/400 → 400/400. Dataset source-label agreement: 339/400 → 340/400. The ten original INVALIDs became four label-correct and six label-wrong results; three previously correct judgments became wrong. Clean-control label agreement fell from 63/64 to 60/64 while both had valid formatting throughout. These findings do not qualify the dataset or establish improved classification quality.
+
+Offline validation before execution: 20 unit/protocol/preparation checks and 14 team-metric tests passed. Exact executed notebook downloaded and checked: code cells match frozen launcher, execution counts 1–4, no error outputs, final stdout matches audited summary. Sanitized snapshot preserves code and original aggregate outputs; it is not a fabricated rerun. [Comparison and hashes](reports/gemma-ab-v1-2026-10-18/README.md), [executed snapshot](notebooks/history/2026-10-18/gemma_ab_v1.executed.sanitized.ipynb), [reproduction](AB_REPRODUCTION.md).
+
+## Pre-merge review fixes and case qualification — 18 October 2026
+
+Addressed all four inline findings on PR #3: enforce approved model/revision pairs, require the exact unique indexed activation-file set, clone without a disposable branch dependency, and accumulate counts for redacted diagnostic patterns. Regression checks cover internally consistent wrong revisions, duplicated/extra activation files, and multiple unknown output patterns. All 23 unit/integration tests and 14 existing metrics checks pass locally (metrics invoked as their standalone test functions; pytest is not installed). No hosted CI checks are configured on this PR.
+
+The strengthened auditor passed on all 1,728 saved activation files across the original two-model pilot and the four Gemma comparison arms. Recomputed comparison output exactly matches the preserved report; original Gemma INVALID count stays ten. The historical A/B overlay is now rebuilt from immutable commit `20450d8`, so current audit improvements do not alter its executed source. Rebuilt archive contents match the uploaded archive exactly. No fresh inference was run for these fixes.
+
+[Case review](reports/gemma-case-review-2026-10-18/README.md) checks both robust Gemma flips and triages all 50 visible records. It finds an unfinished request continuation and a fictional monologue among the two flips; post-hoc removal reverses the positive net B→R effect. This is a sensitivity diagnostic, not a cleaned evaluation or an exclusion decision. The reattached candidate file is byte-identical to the pilot input; original `JAILJUDGE_ID.json` and independent adjudication remain necessary. All original labels and historical outputs are preserved.

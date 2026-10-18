@@ -79,12 +79,22 @@ class Runner:
             raise ValueError("Complete input exceeds 4096 tokens; never truncate the body")
         return {k: v.to("cuda:0") if hasattr(v, "to") else v for k, v in data.items()}
 
-    def run(self, turns, max_new_tokens=4, edit=None):
+    def run(self, turns, max_new_tokens=4, edit=None, output_protocol="native_v1"):
+
         """edit: {layer, direction, mode: replace/remove/add/identity, donor/amount}.
 
         Direction estimation/validation belongs to the interpretability workstream.
         The optional operator acts once at the final prefill token, never during decoding.
         """
+        if output_protocol not in ("native_v1", "ab_constrained_v1"):
+            raise ValueError("Unknown output protocol")
+        constrained = output_protocol == "ab_constrained_v1"
+        generation_kwargs = {}
+        if constrained:
+            from ab_constraint import ABOnlyLogitsProcessor
+            from transformers import LogitsProcessorList
+            max_new_tokens = 1
+            generation_kwargs["logits_processor"] = LogitsProcessorList([ABOnlyLogitsProcessor(self.codes)])
         t = self.torch
         inputs = self.encode(turns)
         length = inputs["input_ids"].shape[-1]
@@ -143,7 +153,7 @@ class Runner:
             with t.inference_mode():
                 out = self.model.generate(**inputs, do_sample=False, num_beams=1,
                     max_new_tokens=max_new_tokens, use_cache=True,
-                    return_dict_in_generate=True, output_logits=True)
+                    return_dict_in_generate=True, output_logits=True, **generation_kwargs)
             t.cuda.synchronize()
             seconds = time.perf_counter()-start
         finally:
@@ -168,13 +178,18 @@ class Runner:
         if not t.isfinite(logp).all():
             raise RuntimeError("Nonfinite next-token scores")
         scores = {c: float(logp[i]) for c, i in self.codes.items()}
-        return {"raw_output": raw, "raw_parsed_text": cleaned,
+        if constrained and (len(new_ids) != 1 or new_ids[0] not in self.codes.values()):
+            raise RuntimeError("Constrained generation did not produce exactly one answer code")
+        return {"output_protocol": output_protocol,
+            "generation_budget": max_new_tokens, "budget_reached": len(new_ids) == max_new_tokens,
+            "stop_reason": "fixed_code_complete" if constrained else ("end_token" if new_ids and new_ids[-1] in stop_ids else "budget"),
+            "raw_output": raw, "raw_parsed_text": cleaned,
             "parsed_text": parsed_text, "output_normalization": normalization, "output_ids": new_ids,
             "input_tokens": length, "input_ids_sha256": sha(json.dumps(inputs["input_ids"].tolist())),
             "logp_A": scores["A"], "logp_B": scores["B"],
             "ab_mass": sum(math.exp(v) for v in scores.values()),
             "end_of_answer": bool(new_ids and new_ids[-1] in stop_ids),
-            "length_cap": len(new_ids) == max_new_tokens and new_ids[-1] not in stop_ids,
+            "length_cap": not constrained and len(new_ids) == max_new_tokens and new_ids[-1] not in stop_ids,
             "seconds": seconds, "peak_gpu_bytes": t.cuda.max_memory_allocated(),
             "edit": edit_log, "status": "ok"}, states
 
