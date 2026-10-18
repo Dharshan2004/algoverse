@@ -1,0 +1,36 @@
+{
+  "status": "complete_audited",
+  "base_commit": "03b32cb2ac6ae6aabf67a6b2da7632c3de852834",
+  "implementation_commit": "20450d80a88942388342cc7440f7b58d9ea36a54",
+  "colab_url": "https://colab.research.google.com/drive/1ziOhZiFOw0JgOqBI_CJFYNpkGHQwf5ww",
+  "original_pilot_files_unchanged": 817,
+  "original_fingerprints_sha256": "7bdce5c9671945e6e615c12752be337169efb6876edcd44cc543d07be4461346",
+  "original_gemma_results_sha256": "053f987d4a42c31b7b313debae17dc0d7f5c2e2dae477ef33d05972a378c333c",
+  "original_invalids_preserved": 10,
+  "source_sha256": {
+    "ab_experiment.py": "b6f8eeb14a7b07bb28912514b6d3f309b13219993de10ef5fea1bafac5dd555a",
+    "metrics.py": "f1a48c2a558f8937673c58597e0989d12de6507dbc003c3e7a6bf75a9a829451",
+    "protocol.py": "1c1ddce723d040028fca3c174ac806bd3066ee9e192fe2a0b727de8a1255a956",
+    "ab_constraint.py": "95b4886d5b5c8c1dedf1892d95d8a5de0b47a0eccc70d573e0d0949ab9290b91",
+    "pilot_report.py": "079afad379fcf33d49f6645d7d2b493a1baf3278d1ec63dc63feedf6d41ab990",
+    "inference.py": "7b3c4e0acd60ac12342e3652aaebaffa7a3df4ea181750bd46d87863c8b7aefd",
+    "ab_report.py": "3a47868cb7569d5ea59a93c5b5261c5ecfdc89ae5b8450fe887fba0b6294561d"
+  },
+  "judgments": 928,
+  "identity_calls": 8,
+  "all_four_arms_and_original_audited": true,
+  "local_and_remote_arm_audits_identical": true,
+  "notebook_code_matches_frozen_launcher": true,
+  "executed_notebook_sha256": "16885c26ef98e1f991782bd492c56af14470eae411325ac68c9403781c19fa30",
+  "sanitized_notebook_sha256": "6e8fb2bdc68c16e0436747f58a16eb44f8b8b8124170a5972f8b9524b9a77e27",
+  "execution_counts": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "notebook_errors": 0,
+  "archive_sha256": "fa7422d2ef4f187ebb47fcec1c73fa7659c9ed934294fa4612082e1c0b8e32da",
+  "summary_sha256": "9298e7b86863c2e176ee9efa828006590868eb7a2ab8df89edf02220128517b8",
+  "manifest_note": "Raw manifest records inference_complete_audit_pending before notebook audit. Remote audit and independent local audit both subsequently passed; raw manifest preserved unchanged. Arm config run_purpose=protocol_smoke is a legacy Runner field; actual cohort and coverage are defined by this manifest and audited input metadata."
+}

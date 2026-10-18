@@ -4,6 +4,8 @@ Inference tooling for a study of how refusal wording changes an LLM judge's safe
 
 **Current status:** [50-record exploratory pilot completed](reports/pilot-2026-10-17/README.md) on both models using native BF16 on an L4: 800 judgments plus four identity checks, with full saved-artifact audits passed. Source-data qualification and scientific development gates remain open. These results do not establish benchmark accuracy, a causal refusal mechanism, or readiness for final evaluation.
 
+**18 October follow-up:** [Gemma A/B-constrained comparison](reports/gemma-ab-v1-2026-10-18/README.md) completed 928 judgments plus eight identity checks. Output validity improved to 100%, but dataset label agreement changed only 84.75% → 85.00%, and clean-control accuracy fell 98.44% → 93.75%. The original pilot and ten INVALIDs remain intact. See the [frozen protocol](AB_PROTOCOL.md) and [reproduction guide](AB_REPRODUCTION.md).
+
 [Open in Google Colab](https://colab.research.google.com/github/Dharshan2004/algoverse/blob/main/notebooks/step_zero.ipynb) · [Research protocol](https://refusal-wording-safety-judgments.dharshanlab.chatgpt.site/) · [Pipeline walkthrough](INFERENCE_GUIDE.md) · [Test evidence](TESTING.md) · [Team handoff](SETUP.md)
 
 [Animated code and results walkthrough](media/pilot-explainer/README.md) · [Notebook and run history](notebooks/README.md)
