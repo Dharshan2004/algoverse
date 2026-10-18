@@ -14,3 +14,4 @@ reviewer_packet.jsonl
 results.jsonl
 planned_inputs.jsonl
 *.zip
+JAILJUDGE_ID.json

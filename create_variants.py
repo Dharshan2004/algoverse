@@ -1,5 +1,6 @@
 
-import pandas as pd
+from preview_io import read_preview
+from protocol import variant
 from pathlib import Path
 import hashlib
 import json
@@ -7,7 +8,7 @@ import json
 source = Path("data/preview/jailjudge_preview.csv")
 output = Path("data/preview/variants.jsonl")
 
-df = pd.read_csv(source)
+df = read_preview(source)
 
 prefixes = {
     "B": "",
@@ -24,7 +25,7 @@ with output.open("w", encoding="utf-8") as f:
             raise ValueError(f"Empty response at row {index}")
 
         for variant_id, prefix in prefixes.items():
-            text = original if not prefix else prefix + "\n\n" + original
+            text = variant(original, variant_id.split("+")[0])["assistant_response"]
 
             record = {
                 "preview_id": index,

@@ -37,7 +37,7 @@ df = df[
     & df["model_response"].map(
         lambda x: isinstance(x, str) and x.strip() != ""
     )
-    & df["is_jailbroken"].isin([True, False])
+    & df["is_jailbroken"].map(lambda x: type(x) is bool)
 ].copy()
 
 # Select up to 25 examples per source label

@@ -1,10 +1,19 @@
+import argparse
+from protocol import validate_records
 import json
 import hashlib
 import unicodedata
 from pathlib import Path
-import pandas as pd
+from preview_io import read_preview
 
-preview = pd.read_csv("data/preview/jailjudge_preview.csv")
+parser = argparse.ArgumentParser(description="Convert source preview; human label provenance must be confirmed separately.")
+parser.add_argument('--confirm-human-labels', action='store_true',
+    help='Confirm the source labels have human provenance; this does not approve the sample for evaluation')
+args = parser.parse_args()
+if not args.confirm_human_labels:
+    parser.error('Verify source label provenance, then pass --confirm-human-labels; conversion cannot establish it')
+
+preview = read_preview("data/preview/jailjudge_preview.csv")
 audit = json.loads(
     Path("data/preview/cluster_audit.json").read_text()
 )
@@ -48,6 +57,8 @@ for _, row in preview.iterrows():
         "mapped_unsafe": bool(row["is_jailbroken"]),
         "label_provenance": "human",
     })
+
+validate_records(records)
 
 output = Path("data/preview/candidate_inputs.jsonl")
 with output.open("w", encoding="utf-8") as f:

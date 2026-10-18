@@ -21,6 +21,8 @@ The judge evaluates an existing response; it is not asked to fulfil the saved re
 
 ## Quick start
 
+For Sabika’s source-data pipeline, see [Dataset preparation](DATASET_PREPARATION.md).
+
 For actual development-data runs, use the [exploratory pilot workflow](PILOT.md). It runs all four variants on both models and provides a separate artifact audit and aggregate report. Dry runs only construct inputs; they do not produce model judgments.
 
 ### Google Colab
@@ -37,11 +39,12 @@ Each default model run uses ten synthetic records × two variants × two mapping
 
 ### Local checks without a GPU
 
-These commands need Python 3 and its standard library. They do not download models or make inference calls.
+These commands need Python 3 and the analysis dependencies below. They do not download models or make inference calls.
 
 ```sh
 git clone https://github.com/Dharshan2004/algoverse.git
 cd algoverse
+python -m pip install -r requirements-analysis.txt
 python -m unittest discover -s tests -v
 python inference.py --dry-run --variants B R N R2 --out runs/planned
 ```

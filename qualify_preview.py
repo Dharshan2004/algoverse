@@ -4,13 +4,13 @@ import re
 import unicodedata
 from pathlib import Path
 
-import pandas as pd
+from preview_io import read_preview
 
 SEED = "20261004"
 INPUT = Path("data/preview/jailjudge_preview.csv")
 OUTPUT = Path("data/preview/cluster_audit.json")
 
-df = pd.read_csv(INPUT)
+df = read_preview(INPUT)
 
 def normalize(text):
     text = unicodedata.normalize("NFKC", str(text))

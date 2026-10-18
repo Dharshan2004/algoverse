@@ -20,7 +20,7 @@ python pilot.py --input data/candidate_inputs.jsonl --out runs/planned-pilot --d
 
 This second command prepares inputs only; it never runs a model. Do not report its outputs as pilot results.
 
-The clean `notebooks/pilot.ipynb` provides Colab setup, private input upload, real execution and download. Publish the workflow branch before using its remote checkout. It contains no embedded dataset or outputs. The original execution notebook used a local source bundle uploaded to Colab; its exact source copies are retained in the private run archive.
+The clean `notebooks/pilot.ipynb` provides Colab setup, private input upload, real execution and download. Its remote checkout is pinned to a recorded integration commit. It contains no embedded dataset or outputs. The original execution notebook used a local source bundle uploaded to Colab; its exact source copies are retained in the private run archive.
 
 ## Audit and summarize
 
