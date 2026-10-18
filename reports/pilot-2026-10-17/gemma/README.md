@@ -15,3 +15,5 @@ Refusal cue effect: +6.0 percentage points.
 Unsafe-to-safe flips under both mappings: 2.
 
 See summary.json for per-mapping counts, invalid-output bounds, checkpoint/software provenance, artifact hashes and state-audit status. Raw text, identifiers, outputs and tensors are not included in this aggregate report.
+
+Follow-up: [investigation of all ten INVALID outputs](../../gemma-invalid-2026-10-18/README.md). Original results are unchanged.
