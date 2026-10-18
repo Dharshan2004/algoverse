@@ -23,7 +23,7 @@ def adapt_metrics(rows):
         'raw_output': r['parsed_text'], 'logp_A': r['logp_A'], 'logp_B': r['logp_B']}
         for r in rows]
 
-def audit(root, inputs, check_states=False):
+def audit(root, inputs, check_states=False, partition="development"):
     root = Path(root)
     config = json.loads((root/'run_config.json').read_text())
     identity = json.loads((root/'identity_check.json').read_text())
@@ -32,7 +32,7 @@ def audit(root, inputs, check_states=False):
     require(config['baseline']=='native' and config.get('prompt_format')=='native', 'Unexpected prompt')
     require(config['input_file_sha256']==sha(Path(inputs).read_text()), 'Input file hash mismatch')
     original = validate_records([json.loads(x) for x in Path(inputs).read_text().splitlines() if x.strip()])
-    require(all(r['study_partition']=='development' for r in original), 'Not development data')
+    require(partition in ('development','synthetic') and all(r['study_partition']==partition for r in original), 'Unexpected study partition')
     source = {r['source_id']:r for r in original}
     rows = [json.loads(x) for x in (root/'results.jsonl').read_text().splitlines() if x.strip()]
     expected = {(sid,v,m) for sid in source for v in VARIANTS for m in MAPPINGS}
