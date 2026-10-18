@@ -12,6 +12,12 @@ import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from protocol import normalize_native_output, parse
 
+def redact_patterns(patterns, allowed):
+    redacted = Counter()
+    for text, count in patterns.items():
+        redacted[text if text in allowed else '[unpublished output]'] += count
+    return dict(redacted)
+
 def diagnose(root):
     root=Path(root)
     config=json.loads((root/'run_config.json').read_text())
@@ -37,7 +43,7 @@ def diagnose(root):
         'output_cap_hits':sum(r['length_cap'] for r in bad),
         'ended_answers':sum(r['end_of_answer'] for r in bad),
         'invalid_input_token_range':[min(r['input_tokens'] for r in bad),max(r['input_tokens'] for r in bad)] if bad else [],
-        'patterns':{k if k in allowed else '[unpublished output]':v for k,v in patterns.items()},
+        'patterns':redact_patterns(patterns, allowed),
         'by_condition':dict(Counter(r['variant']+'/'+r['mapping'] for r in bad)),
         'first_token_ab_mass_range':[min(r['ab_mass'] for r in bad),max(r['ab_mass'] for r in bad)] if bad else [],
         'offline_alternative':{'rule':'argmax(logp_A, logp_B) at first generation position; ties choose A',

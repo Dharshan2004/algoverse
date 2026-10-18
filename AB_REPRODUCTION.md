@@ -5,7 +5,7 @@ python prepare_ab_upload.py --input runs/pilot-2026-10-17/candidate_inputs.jsonl
   --out runs/ab-v1-upload.zip
 ```
 
-Open `notebooks/gemma_ab_v1.ipynb` in Colab through Chrome, select an L4, run top-to-bottom, and upload that ZIP when prompted. The notebook clones GitHub at the exact requested base and verifies every additive source-file hash. The builder refuses changed source/data and existing output archives. The dataset is uploaded separately from the notebook and is not embedded in committed cells. This notebook is the frozen executed experiment source; changes require a new version and manifest.
+Open `notebooks/gemma_ab_v1.ipynb` in Colab through Chrome, select an L4, run top-to-bottom, and upload that ZIP when prompted. The notebook clones GitHub at the exact requested base and verifies every additive source-file hash. The builder retrieves the frozen overlay from immutable Git commit `20450d8`, verifies its expected hashes and the input hash, and refuses existing output archives. Current audit improvements do not silently change the historical experiment. The dataset is uploaded separately from the notebook and is not embedded in committed cells. This notebook is the frozen executed experiment source; changes require a new version and manifest.
 
 The implementation overlay is committed locally at `20450d80a88942388342cc7440f7b58d9ea36a54`. This commit need not be pushed to run the notebook: the upload supplies the reviewed overlay. The downloaded archive records exact executed source copies and their hashes.
 

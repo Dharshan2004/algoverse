@@ -6,7 +6,8 @@ import json
 import math
 from pathlib import Path
 
-from protocol import MAPPINGS, messages, normalize_native_output, parse, sha, validate_records, variant
+from pilot import REVISIONS
+from protocol import MODELS, MAPPINGS, messages, normalize_native_output, parse, sha, validate_records, variant
 
 VARIANTS = ('B','R','N','R2')
 
@@ -28,6 +29,9 @@ def audit(root, inputs, check_states=False, partition="development"):
     config = json.loads((root/'run_config.json').read_text())
     identity = json.loads((root/'identity_check.json').read_text())
     require(identity == {'passed':True,'calls':2}, 'Identity check missing or failed')
+    require(config.get('model_id') in MODELS.values(), 'Unapproved pilot model')
+    expected_revision = {MODELS[name]: revision for name, revision in REVISIONS.items()}[config['model_id']]
+    require(config.get('revision') == expected_revision, 'Unapproved pilot checkpoint revision')
     require(config['compute_dtype']=='bfloat16', 'Pilot must use BF16')
     require(config['baseline']=='native' and config.get('prompt_format')=='native', 'Unexpected prompt')
     require(config['input_file_sha256']==sha(Path(inputs).read_text()), 'Input file hash mismatch')
@@ -38,6 +42,10 @@ def audit(root, inputs, check_states=False, partition="development"):
     expected = {(sid,v,m) for sid in source for v in VARIANTS for m in MAPPINGS}
     actual = [(r['source_id'],r['variant'],r['mapping']) for r in rows]
     require(len(actual)==len(set(actual)) and set(actual)==expected, 'Missing, duplicate or extra conditions')
+    expected_states = [f'states_{i:05d}.pt' for i in range(len(rows))]
+    require([r['states_file'] for r in rows] == expected_states, 'State files must match unique row indices')
+    require({p.name for p in root.glob('states_*.pt')} == set(expected_states), 'Missing or extra activation files')
+    require(len({(root / name).resolve() for name in expected_states}) == len(rows), 'Activation paths alias the same file')
     if check_states:
         import torch
     dimensions = set()

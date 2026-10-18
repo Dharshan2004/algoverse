@@ -13,7 +13,7 @@ def main():
  manifest=json.loads((r/'manifest.json').read_text())
  assert manifest['base_code_commit']=='03b32cb2ac6ae6aabf67a6b2da7632c3de852834'
  for name,h in manifest['source_sha256'].items():
-  assert sha(r/'source'/name)==h==sha(ROOT/name)
+  assert sha(r/'source'/name)==h
   assert hashlib.sha256(subprocess.check_output(['git','show','20450d8:'+name],cwd=ROOT)).hexdigest()==h
  assert sha(r/'candidate_inputs.jsonl')==sha(old/'candidate_inputs.jsonl')
  assert sha(r/'controls.jsonl')==sha(ROOT/'controls/ab_v1.jsonl')

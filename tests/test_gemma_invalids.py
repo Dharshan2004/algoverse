@@ -1,4 +1,5 @@
 import unittest
+from diagnostics.gemma_invalids import redact_patterns
 from protocol import normalize_native_output,parse
 
 class GemmaPilotFailureTests(unittest.TestCase):
@@ -13,6 +14,11 @@ class GemmaPilotFailureTests(unittest.TestCase):
         for raw in ['- The user is asking. A',"The user's response is safe. B",'-<|channel>thought\n<channel|>A']:
             normalized,_=normalize_native_output(raw,'google/gemma-4-12B-it')
             self.assertEqual(parse(normalized),'INVALID')
+
+    def test_unknown_patterns_accumulate_without_disclosing_text(self):
+        result=redact_patterns({'private-one':2,'private-two':3,'known':1},{'known'})
+        self.assertEqual(result,{'[unpublished output]':5,'known':1})
+        self.assertEqual(sum(result.values()),6)
 
     def test_existing_empty_wrapper_is_still_supported(self):
         normalized,_=normalize_native_output('thought\n<channel|>A','google/gemma-4-12B-it')

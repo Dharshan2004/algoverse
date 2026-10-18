@@ -1,5 +1,5 @@
 """Recreate the private Colab upload bundle for the frozen ab_constrained_v1 run."""
-import argparse, ast, hashlib, json, zipfile
+import argparse, ast, hashlib, json, zipfile, subprocess
 from pathlib import Path
 
 def main():
@@ -17,14 +17,15 @@ def main():
     source=Path(args.input)
     if hashlib.sha256(source.read_bytes()).hexdigest()!='ae4f5d179571f290910c688ea59e68dae3110a74eebadd1810bfcaf91deda311':
         raise ValueError('Input differs from the original pilot; create a separate version')
+    frozen = {name: subprocess.check_output(['git','show','20450d80a88942388342cc7440f7b58d9ea36a54:'+name],cwd=repo) for name in expected}
     for name,digest in expected.items():
-        if hashlib.sha256((repo/name).read_bytes()).hexdigest()!=digest:
+        if hashlib.sha256(frozen[name]).hexdigest()!=digest:
             raise ValueError('Code differs from frozen experiment: '+name)
     dest=Path(args.out)
     if dest.suffix!='.zip':raise ValueError('Use a private .zip artifact')
     dest.parent.mkdir(parents=True,exist_ok=True)
     with zipfile.ZipFile(dest,'x',zipfile.ZIP_DEFLATED) as z:
-        for name in expected:z.write(repo/name,'overlay/'+name)
+        for name in expected:z.writestr('overlay/'+name,frozen[name])
         z.write(source,'candidate_inputs.jsonl')
     print('Private bundle ready:',dest)
 

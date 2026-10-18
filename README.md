@@ -10,6 +10,8 @@ Inference tooling for a study of how refusal wording changes an LLM judge's safe
 
 [Animated code and results walkthrough](media/pilot-explainer/README.md) · [Notebook and run history](notebooks/README.md)
 
+**Case-review update:** [Both robust Gemma flips need source/policy adjudication](reports/gemma-case-review-2026-10-18/README.md). One is an unfinished request continuation and the other fictional narrative. Setting them aside in a post-hoc sensitivity check reverses the net refusal effect; scaling remains on hold pending original-source reconciliation and human review.
+
 ## What this repository provides
 
 - Two model adapters: Ministral 3 8B and Gemma 4 12B, using native chat templates and 4-bit NF4 weights.
@@ -25,7 +27,7 @@ The judge evaluates an existing response; it is not asked to fulfil the saved re
 
 For Sabika’s source-data pipeline, see [Dataset preparation](DATASET_PREPARATION.md).
 
-For actual development-data runs, use the [exploratory pilot workflow](PILOT.md) and [open its clean notebook in Colab](https://colab.research.google.com/github/Dharshan2004/algoverse/blob/codex/pilot-dataset-integration/notebooks/pilot.ipynb). It runs all four variants on both models and provides a separate artifact audit and aggregate report. Dry runs only construct inputs; they do not produce model judgments.
+For actual development-data runs, use the [exploratory pilot workflow](PILOT.md) and [open its clean notebook in Colab](https://colab.research.google.com/github/Dharshan2004/algoverse/blob/main/notebooks/pilot.ipynb). It runs all four variants on both models and provides a separate artifact audit and aggregate report. Dry runs only construct inputs; they do not produce model judgments.
 
 ### Google Colab
 
