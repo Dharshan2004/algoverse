@@ -5,7 +5,7 @@ import json
 import math
 from pathlib import Path
 import torch
-from refusal_cues.protocol import MAPPINGS, messages, normalize_native_output, parse, sha, variant
+from refusal_cues.protocol import MAPPINGS, extract_leading_ab, messages, normalize_native_output, parse, sha, variant
 
 def audit(directory):
     root = Path(directory)
@@ -27,10 +27,15 @@ def audit(directory):
         expected = variant(row["original_response"], row["variant"])
         require(all(row[k] == v for k, v in expected.items()), "Body or variant changed")
         require(row["model_revision"] == config["revision"], "Model revision mismatch")
-        if config.get("output_parser_version") == "native_empty_channel_v1":
+        parser_version = config.get("output_parser_version", "legacy_eos_only")
+        if parser_version == "native_empty_channel_v1":
             normalized, method = normalize_native_output(row["raw_parsed_text"], config["model_id"])
             require(row["parsed_text"] == normalized and row["output_normalization"] == method,
                     "Native normalization mismatch")
+        elif parser_version == "first_ab_token_v1":
+            code, _method = extract_leading_ab(row["raw_parsed_text"])
+            require(row["parsed_text"] == code and row["output_normalization"] == "first_ab_token_v1",
+                    "First-token answer mismatch")
         require(row["verdict"] == parse(row["parsed_text"], row["mapping"]), "Verdict mismatch")
         turns = messages(row["original_prompt"], row["assistant_response"], row["mapping"],
                          config["baseline"], policy=config["policy"],

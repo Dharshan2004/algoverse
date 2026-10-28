@@ -71,9 +71,9 @@ For Gemma, the runner explicitly passes `enable_thinking=False`. It tokenizes th
 
 ## 6. Run inference and capture six states
 
-`Runner.run()` first processes the whole input. This is the **prefill** stage. It then generates up to four new tokens using greedy decoding: choose the highest-scoring permitted next token, with no random sampling.
+`Runner.run()` first processes the whole input. This is the **prefill** stage. It then generates new tokens with greedy decoding: choose the highest-scoring permitted next token, with no random sampling. The default native protocol allows four new tokens.
 
-During prefill, hooks capture the hidden-state vector at the **last input-template token** from six selected decoder depths. For a 48-layer decoder, the zero-based layer indices are 11, 16, 21, 26, 31 and 35.
+During prefill, hooks capture the hidden-state vector at the **last input-template token** from six selected decoder depths. For a 48-layer decoder, the zero-based layer indices are 11, 16, 21, 26, 31 and 35. The default native protocol then generates up to four new tokens. `--output-protocol ab_first_token_v1` raises that ceiling so a rationale after the forced letter can finish; see below.
 
 Each vector is a snapshot of internal model numbers at the boundary immediately before the answer. It is not a safety label. Vectors are moved to CPU and saved; the script does not retain every token from every layer.
 
@@ -81,7 +81,7 @@ Hooks fire once during prefill and skip later decoding steps. They are removed i
 
 ## 7. Keep verdicts and scores distinct
 
-The script preserves the raw generated text and token IDs. It removes trailing known EOS/PAD markers and, for Gemma only, a recognized **empty** native channel wrapper. Then `parse()` accepts an exact A or B after outer whitespace. Prose, an empty answer, nonempty reasoning, or malformed channel text stays **INVALID**.
+The script preserves the raw generated text and token IDs. It removes trailing known EOS/PAD markers and, for Gemma only, a recognized **empty** native channel wrapper. Under `native_v1`, `parse()` then accepts an exact A or B after outer whitespace. Prose, an empty answer, nonempty reasoning, or malformed channel text stays **INVALID**. `ab_first_token_v1` stores the forced first letter as `parsed_text` and ignores trailing text; see below.
 
 Separately, it records the first generated position's full-vocabulary log probabilities:
 
@@ -125,6 +125,28 @@ Every row keeps `raw_output`, token IDs and `raw_parsed_text`; `parsed_text` hol
 The four-token generation cap, native input template, weights, greedy decoding and first-token scores are unchanged. A/B scores are still measured at the original first generated position, **not recomputed after the wrapper**. Low A/B mass and length-cap flags remain visible.
 
 References: [Google's model card, disabled thinking behavior](https://huggingface.co/google/gemma-4-12B-it#2-thinking-mode-configuration) and [vLLM's native Gemma parser utilities](https://github.com/vllm-project/vllm/blob/main/vllm/reasoning/gemma4_utils.py), which document spurious bare channel labels. Our implementation is intentionally narrower: it does not discard nonempty reasoning.
+
+## First-token A/B constraint
+
+`--output-protocol` selects the decoder. The default `native_v1` is unchanged: up to four new tokens, no vocabulary mask, and an exact A or B after the empty-channel normalizer.
+
+`ab_first_token_v1` masks **only the first generated token** to the verified A and B ids (`FirstTokenABLogitsProcessor`). Later tokens stay unconstrained, so the model may continue with a rationale. The ceiling is 256 new tokens; generation still stops at EOS, and a truncated rationale is flagged with `length_cap` without changing the verdict. The verdict is that first A/B token. Trailing reasoning, including a later channel or thought span, does not make the row INVALID. When the saved text is read back, leading channel/thought control markers are skipped and a clear A or B is kept; ordinary prose that does not start with A or B stays INVALID. Full-vocabulary `logp_A` and `logp_B` are still the raw scores at the first position, before the mask.
+
+`ab_constrained_v1` remains the frozen one-token answer-only arm. It masks every step and does not allow trailing text.
+
+Gemma development re-run (B/R, BF16, forced A/B first token):
+
+```sh
+python3 scripts/run_inference.py \
+  --model gemma \
+  --variants B R \
+  --compute-dtype bfloat16 \
+  --input data/processed/development_inputs.jsonl \
+  --output-protocol ab_first_token_v1 \
+  --out runs/dev-gemma-br-first-token
+```
+
+Identity checks use the same protocol as the judgments. `--dry-run` records `output_protocol` and does not load a model. Omit the flag, or pass `--output-protocol native_v1`, to keep the unconstrained path.
 
 ## What the intervention interface does
 

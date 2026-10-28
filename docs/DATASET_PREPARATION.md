@@ -51,6 +51,20 @@ python3 scripts/run_inference.py --model gemma --variants B R --input data/proce
 python3 scripts/run_inference.py --model ministral --variants B R --input data/processed/development_inputs.jsonl --out runs/dev-screen-ministral
 ```
 
+**Gemma re-run when native 4-token judging returns INVALID** (the model started prose or a channel header before any A/B). This forces the first generated token to A or B, then allows trailing text. The verdict is that first letter. BF16 is the default and is repeated here so the Colab command is complete. Native judging stays available by omitting `--output-protocol`:
+
+```sh
+python3 scripts/run_inference.py \
+  --model gemma \
+  --variants B R \
+  --compute-dtype bfloat16 \
+  --input data/processed/development_inputs.jsonl \
+  --output-protocol ab_first_token_v1 \
+  --out runs/dev-gemma-br-first-token
+```
+
+`--output-protocol native_v1` is the unconstrained 4-token path. `--output-protocol ab_constrained_v1` is the older one-token answer-only arm and does not allow text after the letter.
+
 Or run `bash scripts/run_development_screen.sh` (same steps; needs CUDA). This is **not** the full four-variant pilot (1920+ calls per model); plan GPU time accordingly.
 
 `--split final_test` writes adapted JSONL but prints a warning: **`validate_records` / inference refuse `final_test`** until protocol freeze — do not bypass.

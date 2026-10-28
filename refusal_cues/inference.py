@@ -6,8 +6,15 @@ import math
 import re
 import time
 from pathlib import Path
+from refusal_cues.ab_constraint import (
+    AB_FIRST_TOKEN_V1, FIRST_TOKEN_REASONING_BUDGET, OUTPUT_PROTOCOLS,
+    ABOnlyLogitsProcessor, FirstTokenABLogitsProcessor, output_protocol_settings,
+)
 from refusal_cues.paths import DEFAULT_EXAMPLES
-from refusal_cues.protocol import MODELS, MAPPINGS, POLICY, depths, messages, normalize_native_output, parse, sha, validate_records, variant
+from refusal_cues.protocol import (
+    MODELS, MAPPINGS, POLICY, depths, extract_leading_ab, messages,
+    normalize_native_output, parse, sha, validate_records, variant,
+)
 
 class Runner:
     def __init__(self, model_id, revision="main", compute_dtype="bfloat16"):
@@ -94,18 +101,19 @@ class Runner:
         Direction estimation/validation belongs to the interpretability workstream.
         The optional operator acts once at the final prefill token, never during decoding.
         """
-        if output_protocol not in ("native_v1", "ab_constrained_v1"):
-            raise ValueError("Unknown output protocol")
-        constrained = output_protocol == "ab_constrained_v1"
-        generation_kwargs = {}
-        if constrained:
-            from refusal_cues.ab_constraint import ABOnlyLogitsProcessor
-            from transformers import LogitsProcessorList
-            max_new_tokens = 1
-            generation_kwargs["logits_processor"] = LogitsProcessorList([ABOnlyLogitsProcessor(self.codes)])
+        settings = output_protocol_settings(output_protocol, max_new_tokens)
+        max_new_tokens = settings["max_new_tokens"]
+        answer_only = settings["constrain"] == "all"
+        first_token_ab = settings["constrain"] == "first"
         t = self.torch
         inputs = self.encode(turns)
         length = inputs["input_ids"].shape[-1]
+        generation_kwargs = {}
+        if answer_only or first_token_ab:
+            from transformers import LogitsProcessorList
+            processor = (ABOnlyLogitsProcessor(self.codes) if answer_only else
+                         FirstTokenABLogitsProcessor(self.codes, int(length)))
+            generation_kwargs["logits_processor"] = LogitsProcessorList([processor])
         states, handles, fired = {}, [], set()
         edit_log = {}
         selected = set(self.depths)
@@ -181,23 +189,33 @@ class Runner:
         while cleaned_ids and cleaned_ids[-1] in stop_ids:
             cleaned_ids.pop()
         cleaned = self.tokenizer.decode(cleaned_ids, skip_special_tokens=False)
-        parsed_text, normalization = normalize_native_output(cleaned, self.model_id)
+        code_of = {i: c for c, i in self.codes.items()}
+        if answer_only and (len(new_ids) != 1 or new_ids[0] not in code_of):
+            raise RuntimeError("Constrained generation did not produce exactly one answer code")
+        if first_token_ab:
+            if not new_ids or new_ids[0] not in code_of:
+                raise RuntimeError("First-token A/B constraint did not produce an A or B token")
+            code = code_of[new_ids[0]]
+            text_code, _ = extract_leading_ab(cleaned)
+            if text_code != code:
+                raise RuntimeError("Constrained A/B token is not the leading answer in the decoded text")
+            parsed_text, normalization = code, "first_ab_token_v1"
+        else:
+            parsed_text, normalization = normalize_native_output(cleaned, self.model_id)
         logp = out.logits[0][0].float().log_softmax(-1)
         if not t.isfinite(logp).all():
             raise RuntimeError("Nonfinite next-token scores")
         scores = {c: float(logp[i]) for c, i in self.codes.items()}
-        if constrained and (len(new_ids) != 1 or new_ids[0] not in self.codes.values()):
-            raise RuntimeError("Constrained generation did not produce exactly one answer code")
         return {"output_protocol": output_protocol,
             "generation_budget": max_new_tokens, "budget_reached": len(new_ids) == max_new_tokens,
-            "stop_reason": "fixed_code_complete" if constrained else ("end_token" if new_ids and new_ids[-1] in stop_ids else "budget"),
+            "stop_reason": "fixed_code_complete" if answer_only else ("end_token" if new_ids and new_ids[-1] in stop_ids else "budget"),
             "raw_output": raw, "raw_parsed_text": cleaned,
             "parsed_text": parsed_text, "output_normalization": normalization, "output_ids": new_ids,
             "input_tokens": length, "input_ids_sha256": sha(json.dumps(inputs["input_ids"].tolist())),
             "logp_A": scores["A"], "logp_B": scores["B"],
             "ab_mass": sum(math.exp(v) for v in scores.values()),
             "end_of_answer": bool(new_ids and new_ids[-1] in stop_ids),
-            "length_cap": not constrained and len(new_ids) == max_new_tokens and new_ids[-1] not in stop_ids,
+            "length_cap": not answer_only and len(new_ids) == max_new_tokens and new_ids[-1] not in stop_ids,
             "seconds": seconds, "peak_gpu_bytes": t.cuda.max_memory_allocated(),
             "edit": edit_log, "status": "ok"}, states
 
@@ -213,6 +231,11 @@ def main():
     ap.add_argument("--baseline", choices=["native", "content", "strict"], default="native")
     ap.add_argument("--format-reminder", action="store_true",
                     help="Experimental synthetic-only prompt adjustment; not the frozen research prompt")
+    ap.add_argument("--output-protocol", choices=OUTPUT_PROTOCOLS, default="native_v1",
+                    help="native_v1: unconstrained decoding and a 4-token budget (default). "
+                         "ab_first_token_v1: force the first generated token to A or B, allow trailing "
+                         f"text up to {FIRST_TOKEN_REASONING_BUDGET} tokens, and take that first token as the verdict. "
+                         "ab_constrained_v1: frozen one-token answer-only arm.")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     records = validate_records([json.loads(s) for s in Path(args.input).read_text().splitlines() if s.strip()])
@@ -230,14 +253,20 @@ def main():
     if args.dry_run:
         with (outdir/"planned_inputs.jsonl").open("w") as f:
             for r, value, mapping, turns in plans:
-                f.write(json.dumps({"source_id": r["source_id"], **value, "mapping": mapping, "messages": turns}, ensure_ascii=False)+"\n")
-        print(f"Validated {len(records)} records; planned {len(plans)} calls. NO model was run.")
+                f.write(json.dumps({"source_id": r["source_id"], **value, "mapping": mapping,
+                                    "output_protocol": args.output_protocol, "messages": turns}, ensure_ascii=False)+"\n")
+        print(f"Validated {len(records)} records; planned {len(plans)} calls "
+              f"under {args.output_protocol}. NO model was run.")
         return
     if args.compute_dtype == "float16" and any(r["study_partition"] != "synthetic" for r in records):
         raise ValueError("T4/FP16 compatibility mode only permits synthetic fixtures; protocol experiments require BF16")
     runner = Runner(MODELS[args.model], args.revision, args.compute_dtype)
+    if args.output_protocol == AB_FIRST_TOKEN_V1:
+        runner.meta["output_parser_version"] = "first_ab_token_v1"
     runner.meta.update(prompt_format="reminder_v1" if args.format_reminder else "native",
-                       protocol_prompt_match=not args.format_reminder)
+                       protocol_prompt_match=not args.format_reminder,
+                       output_protocol=args.output_protocol,
+                       generation_budget=output_protocol_settings(args.output_protocol)["max_new_tokens"])
     # Preflight encodes every planned input before model calls (no arbitrary token cap).
     # Dataset intake keeps complete cases; only true model-context overflow fails here.
     for _, _, _, turns in plans:
@@ -246,10 +275,11 @@ def main():
     (outdir/"run_config.json").write_text(json.dumps({**runner.meta, "args": vars(args),
         "policy": POLICY, "policy_sha256": sha(POLICY), "baseline": args.baseline,
         "input_file_sha256": sha(Path(args.input).read_text()), "validated_gpu": False}, indent=2))
-    # Native/identity equality checks reproducibility and prefill hook execution.
+    # Identity equality checks reproducibility and prefill hooks under the selected protocol.
     turns = plans[0][3]
-    native, native_states = runner.run(turns)
-    identity, identity_states = runner.run(turns, edit={"layer": runner.depths[0], "mode": "identity"})
+    native, native_states = runner.run(turns, output_protocol=args.output_protocol)
+    identity, identity_states = runner.run(turns, edit={"layer": runner.depths[0], "mode": "identity"},
+                                           output_protocol=args.output_protocol)
     if native["output_ids"] != identity["output_ids"] or any(abs(native[k]-identity[k]) > 1e-5 for k in ("logp_A", "logp_B")):
         raise RuntimeError("Identity smoke check failed; stop this model")
     if any(not runner.torch.equal(native_states[k], identity_states[k]) for k in native_states):
@@ -257,7 +287,7 @@ def main():
     (outdir/"identity_check.json").write_text(json.dumps({"passed": True, "calls": 2}))
     with (outdir/"results.jsonl").open("w") as f:
         for i, (r, value, mapping, turns) in enumerate(plans):
-            result, states = runner.run(turns)
+            result, states = runner.run(turns, output_protocol=args.output_protocol)
             unsafe_code = "B" if mapping == "A_safe" else "A"
             safe_code = "A" if mapping == "A_safe" else "B"
             state_file = f"states_{i:05d}.pt"

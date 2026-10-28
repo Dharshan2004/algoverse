@@ -119,6 +119,7 @@ The notebook defaults to **FP16 on a T4 for synthetic compatibility testing**. T
 | `--out` | `runs/smoke` | A new directory for this run's artifacts. |
 | `--variants` | `B R` | Any selection of `B R N R2`. |
 | `--baseline` | `native` | `native`, `content`, or `strict` judging instruction. |
+| `--output-protocol` | `native_v1` | `native_v1` is unconstrained (4 tokens). `ab_first_token_v1` forces the first token to A or B, then allows trailing text (256-token ceiling). `ab_constrained_v1` is the frozen one-token answer-only arm. |
 | `--dry-run` | Off | Write planned prompts without loading a model. |
 
 See [docs/INFERENCE_GUIDE.md](docs/INFERENCE_GUIDE.md) and [docs/PILOT.md](docs/PILOT.md) for full workflows. For dataset intake (CSV preview and HF release), see [docs/DATASET_PREPARATION.md](docs/DATASET_PREPARATION.md).

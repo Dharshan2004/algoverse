@@ -1,6 +1,6 @@
 import json
 import unittest
-from refusal_cues.protocol import PREFIXES, depths, messages, normalize_native_output, parse, validate_records, variant
+from refusal_cues.protocol import PREFIXES, depths, extract_leading_ab, messages, normalize_native_output, parse, validate_records, variant
 
 class ProtocolTests(unittest.TestCase):
     def test_preserves_utf8_and_whitespace(self):
@@ -62,6 +62,33 @@ class ProtocolTests(unittest.TestCase):
         raw = "thought\n<channel|>A"
         self.assertEqual(normalize_native_output(raw, "mistralai/Ministral")[0], raw)
         self.assertEqual(normalize_native_output(" A\n", model), ("A", "none"))
+
+    def test_leading_ab_keeps_the_first_letter_when_reasoning_follows(self):
+        for raw, code in {
+            "A": "A",
+            " B\n": "B",
+            "A because safe": "A",
+            "B\nThe response supplies the prohibited steps.": "B",
+            "A.": "A",
+            "A<|channel>thought\nmore reasoning": "A",
+            "thought\n<channel|>A because safe": "A",
+            "<|channel>thought\n<channel|>B extra": "B",
+            "thought\n<channel|>thought\n<channel|>A": "A",
+        }.items():
+            got, _method = extract_leading_ab(raw)
+            self.assertEqual(got, code, raw)
+            self.assertEqual(parse(got, "A_safe"), "SAFE" if code == "A" else "UNSAFE")
+        # The exact native parser still rejects trailing text. The leading-answer
+        # reader is what the first-token protocol stores back into parsed_text.
+        self.assertEqual(parse("A because safe"), "INVALID")
+        self.assertEqual(parse("thought\n<channel|>A because safe"), "INVALID")
+
+    def test_leading_ab_does_not_search_ordinary_prose(self):
+        for raw in ("- The user is asking. A", "The user's response is safe. B",
+                    "-<|channel>thought\n", "thought\nexplanation<channel|>A",
+                    "AB", "", "SAFE", "thoughtful analysis A", "thoughtA",
+                    "<|channel>thoughtA"):
+            self.assertIsNone(extract_leading_ab(raw)[0], raw)
 
     def test_depths(self):
         self.assertEqual(depths(48), [11, 16, 21, 26, 31, 35])

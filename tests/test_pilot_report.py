@@ -91,6 +91,21 @@ class PilotTests(unittest.TestCase):
             (root / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
             self.assertEqual(audit(root, inp)[2]["rows"], 16)
 
+    def test_first_token_rows_accept_trailing_reasoning(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            inp, rows = self.artifacts(root)
+            rows[0]["raw_parsed_text"] = "B\n<|channel>thought\nThe refusal still gives the address."
+            rows[0]["parsed_text"] = "B"
+            rows[0]["output_normalization"] = "first_ab_token_v1"
+            (root / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+            self.assertEqual(audit(root, inp)[2]["rows"], 16)
+            broken = copy.deepcopy(rows)
+            broken[0]["raw_parsed_text"] = "The user's response is safe. B"
+            (root / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in broken))
+            with self.assertRaisesRegex(ValueError, "First-token answer mismatch"):
+                audit(root, inp)
+
     def test_reject_duplicate_and_extra_activation_files(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);inp,rows=self.artifacts(root)
