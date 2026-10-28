@@ -21,8 +21,9 @@ for name,model in MODELS.items():
        d=proc.apply_chat_template(turns,tokenize=True,add_generation_prompt=True,enable_thinking=False,return_tensors="pt",return_dict=True)
        ids=d['input_ids']; n=int(ids.shape[-1])
        lengths.append({'variant':v,'mapping':m,'baseline':b,'literal':literal,'tokens':n})
-   rows.append({'source_id':r['source_id'],'max_tokens':max(x['tokens'] for x in lengths),'within_4096':all(x['tokens']<=4096 for x in lengths),'conditions':lengths})
-  report['models'][name]={'revision':revision,'backend':type(proc).__name__,'status':'pass' if all(x['within_4096'] for x in rows) else 'overlength','rows':rows}
+   max_t=max(x['tokens'] for x in lengths)
+   rows.append({'source_id':r['source_id'],'max_tokens':max_t,'exceeds_4096':max_t>4096,'conditions':lengths})
+  report['models'][name]={'revision':revision,'backend':type(proc).__name__,'status':'reported','rows':rows,'note':'Lengths are reported only; exceeding 4096 is not an exclusion gate.'}
   print(name,'PASS',min(x['max_tokens'] for x in rows),max(x['max_tokens'] for x in rows),flush=True)
  except Exception as e:
   report['models'][name]={'revision':revision,'status':'blocked','error':type(e).__name__+': '+str(e)};print(name,report['models'][name],flush=True)

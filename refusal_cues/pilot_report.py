@@ -59,7 +59,7 @@ def audit(root, inputs, check_states=False, partition="development"):
         require(r['verdict']==parse(normalized,r['mapping']), 'Verdict mismatch')
         prompt=messages(r['original_prompt'],r['assistant_response'],r['mapping'],config['baseline'],policy=config['policy'])
         require(r['prompt_sha256']==sha(json.dumps(prompt,ensure_ascii=False)), 'Prompt mismatch')
-        require(0<r['input_tokens']<=4096, 'Invalid input length')
+        require(r['input_tokens'] > 0, 'Invalid input length')
         require(all(math.isfinite(r[k]) for k in ['logp_A','logp_B','ab_mass','semantic_margin','seconds']), 'Nonfinite score')
         require(r['logp_A']<=0 and r['logp_B']<=0 and 0<=r['ab_mass']<=1.00001, 'Invalid probability')
         require(abs(math.exp(r['logp_A'])+math.exp(r['logp_B'])-r['ab_mass'])<1e-7, 'A/B mass mismatch')

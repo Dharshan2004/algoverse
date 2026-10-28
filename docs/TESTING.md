@@ -31,7 +31,7 @@ Six protocol unit tests also passed inside Colab. The offline four-variant plan 
 
 The audit verifies row completeness and uniqueness, unchanged response bodies, strict semantic mapping, finite scores, probability-mass and semantic-margin arithmetic, model revision consistency, and the six saved CPU activation vectors per row. The runner checked identity output/token/log-probability agreement and exact saved-state equality. These checks do not establish benchmark accuracy, a valid refusal direction, or causal effects.
 
-The synthetic fixtures do not approach the 4096-token boundary. BF16 execution, real dataset audits, near-boundary cases, nonidentity intervention validation, direction estimation, behavioral gates, and final evaluation remain outstanding. No final-test data was used.
+The synthetic fixtures are short; they do not stress long complete inputs. BF16 execution, real dataset audits, long-input GPU runs, nonidentity intervention validation, direction estimation, behavioral gates, and final evaluation remain outstanding. No final-test data was used. Historical runs recorded `max_input_tokens: 4096` in configs; that pilot gate has been removed—complete cases are kept and lengths are reported instead.
 
 ## Reproduction
 

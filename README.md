@@ -130,7 +130,7 @@ Run outputs (`results.jsonl`, `states_*.pt`, etc.) belong under **`runs/`** loca
 
 ## Remaining work before research evaluation
 
-- Validate the BF16 configuration and actual development examples, including inputs near the 4,096-token limit.
+- Validate the BF16 configuration and actual development examples, including long complete inputs (no arbitrary 4,096-token intake exclusion; report lengths and handle model context limits at runtime).
 - Reconcile the rubric with source annotation rules; audit human labels, provenance and cluster splits.
 - Check complete-input eligibility with both tokenizers and the longest approved prompt/variant.
 - Validate nonidentity edits, model-specific refusal directions and behavioral controls.

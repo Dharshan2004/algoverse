@@ -36,7 +36,7 @@ def audit(directory):
                          config["baseline"], policy=config["policy"],
                          format_reminder=config.get("prompt_format", "native") == "reminder_v1")
         require(row["prompt_sha256"] == sha(json.dumps(turns, ensure_ascii=False)), "Prompt reconstruction mismatch")
-        require(0 < row["input_tokens"] <= 4096, "Input length out of bounds")
+        require(row["input_tokens"] > 0, "Invalid input length")
         require(all(math.isfinite(row[k]) for k in ("logp_A", "logp_B", "ab_mass", "semantic_margin", "seconds")), "Nonfinite measurement")
         require(0 <= row["ab_mass"] <= 1.00001, "Invalid probability mass")
         mass = math.exp(row["logp_A"]) + math.exp(row["logp_B"])

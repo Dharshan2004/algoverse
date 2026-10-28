@@ -21,8 +21,8 @@ Earlier October 4 repo/invitation task was already acted on: your [Slack update]
 
 1. Resolved by Priyadharshan on 11 October: follow the hosted research site as the authoritative protocol. Use `mistralai/Ministral-3-8B-Instruct-2512-BF16` and `google/gemma-4-12B-it`. The earlier meeting-note phrase "two Gemma models" does not require further confirmation. Ministral is the first primary-model candidate; screen both models and apply all protocol qualification gates.
 2. Both user-approved Colab T4/FP16 synthetic runs completed: 42 calls/model, identity and saved-artifact audits passed. Ministral had 0/40 INVALID outputs; Gemma initially had 4/40 legacy-parser INVALIDs. A fresh 42-call run after correcting empty native channel parsing passed with 0/40 INVALID; raw wrappers and first-token scores remain recorded. Nine regression tests passed. See [TESTING.md](TESTING.md). BF16 protocol execution and actual development qualification remain pending; a synthetic format pass does not satisfy them.
-3. Synthetic fixtures establish no safety accuracy or causal result. Include actual short/long dataset cases near the 4096-token boundary in the GPU execution audit when eligible source data arrives.
-4. Before development screening, verify each complete input against both tokenizers and the longest approved prompt/variant, source policy compatibility, cluster splits and provenance. This runner checks only the model currently loaded.
+3. Synthetic fixtures establish no safety accuracy or causal result. Include actual short and long complete development cases in GPU execution audits when eligible source data arrives. **Do not exclude records solely because templated input exceeds 4,096 tokens** (team decision, October 2026); measure and report token lengths instead.
+4. Before development screening, tokenize each complete input on both models for length reporting and eligibility review, plus source policy compatibility, cluster splits and provenance. This runner checks only the model currently loaded and does not apply a hard 4,096-token intake gate.
 5. Check all saved smoke outputs manually; do not infer success from script completion. Preserve environment locks, model SHAs and the actual measured memory for review.
 6. Final evaluation remains blocked until the site's audit, generation-validation, power and freeze gates are met.
 
@@ -58,7 +58,7 @@ No submitted GitHub review was present when this handoff was prepared. Pratham's
 
 - [ ] Pratham: review the inference setup and its assumptions.
 - [ ] Priyadharshan: validate native BF16 execution and short/near-limit development inputs.
-- [ ] Priyadharshan and Sabika: agree on input schema, source rubric, human-label provenance, cluster splits and cross-model token limits.
+- [ ] Priyadharshan and Sabika: agree on input schema, source rubric, human-label provenance, cluster splits and cross-model length reporting (no 4,096-token exclusion gate).
 - [ ] Priyadharshan and Mehrage: validate nonidentity operators and model-specific direction/donor provenance before intervention experiments.
 - [ ] Hemanya and Laasya: integrate evaluation metrics and required controls.
 - [ ] Team: complete protocol qualification, power and freeze checks before final evaluation.

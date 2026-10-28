@@ -67,7 +67,7 @@ Weights use **4-bit NF4 with double quantization** to reduce GPU memory. Compute
 
 `Runner.encode()` applies the model's native chat template. That template adds the model-specific system/user/assistant boundary tokens.
 
-For Gemma, the runner explicitly passes `enable_thinking=False`. It checks the **complete templated input**, not just the saved response, against the 4,096-token maximum. An overlong input raises an error; it is not silently truncated.
+For Gemma, the runner explicitly passes `enable_thinking=False`. It tokenizes the **complete templated input**, not just the saved response, without an arbitrary pilot cap. Inputs are never silently truncated. If a templated prompt exceeds the loaded checkpoint’s configured context (`model_max_position_embeddings` in `run_config.json`), encoding fails with an explicit error; GPU OOM may still occur on very long inputs.
 
 ## 6. Run inference and capture six states
 

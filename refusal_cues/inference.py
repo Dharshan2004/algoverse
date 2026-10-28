@@ -26,6 +26,7 @@ class Runner:
         self.revision = model_info(model_id, revision=revision).sha
         torch.manual_seed(20261004)
         config = tr.AutoConfig.from_pretrained(model_id, revision=self.revision, trust_remote_code=False)
+        self.model_max_position_embeddings = getattr(config, "max_position_embeddings", None)
         arch = config.architectures[0]
         cls = getattr(tr, arch, None)
         if cls is None:
@@ -61,7 +62,8 @@ class Runner:
                     or getattr(self.tokenizer, "chat_template", None))
         self.meta = {"model_id": model_id, "revision": self.revision,
             "architecture": arch, "decoder_path": self.layer_path, "depths": self.depths,
-            "code_ids": self.codes, "seed": 20261004, "max_input_tokens": 4096,
+            "code_ids": self.codes, "seed": 20261004,
+            "model_max_position_embeddings": self.model_max_position_embeddings,
             "quantization": "NF4 double quantization", "compute_dtype": compute_dtype,
             "protocol_precision_match": compute_dtype == "bfloat16",
             "run_purpose": "protocol_smoke" if compute_dtype == "bfloat16" else "T4_FP16_compatibility_only",
@@ -76,8 +78,13 @@ class Runner:
     def encode(self, turns):
         data = self.processor.apply_chat_template(turns, tokenize=True, add_generation_prompt=True,
             enable_thinking=False, return_tensors="pt", return_dict=True)
-        if data["input_ids"].shape[-1] > 4096:
-            raise ValueError("Complete input exceeds 4096 tokens; never truncate the body")
+        length = int(data["input_ids"].shape[-1])
+        limit = self.model_max_position_embeddings
+        if limit is not None and length > limit:
+            raise ValueError(
+                f"Complete templated input has {length} tokens; exceeds model context ({limit}). "
+                "Never truncate the body."
+            )
         return {k: v.to("cuda:0") if hasattr(v, "to") else v for k, v in data.items()}
 
     def run(self, turns, max_new_tokens=4, edit=None, output_protocol="native_v1"):
@@ -231,8 +238,8 @@ def main():
     runner = Runner(MODELS[args.model], args.revision, args.compute_dtype)
     runner.meta.update(prompt_format="reminder_v1" if args.format_reminder else "native",
                        protocol_prompt_match=not args.format_reminder)
-    # Preflight all selected inputs before model calls; cross-model length
-    # eligibility is a separate dataset intake gate, not implied by this check.
+    # Preflight encodes every planned input before model calls (no arbitrary token cap).
+    # Dataset intake keeps complete cases; only true model-context overflow fails here.
     for _, _, _, turns in plans:
         runner.encode(turns)
     print(f"Preflight passed for {len(plans)} inputs; running identity check", flush=True)

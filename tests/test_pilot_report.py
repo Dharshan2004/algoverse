@@ -82,6 +82,15 @@ class PilotTests(unittest.TestCase):
             (root/'results.jsonl').write_text(''.join(json.dumps(r)+'\n' for r in rows))
             with self.assertRaisesRegex(ValueError,'Unapproved pilot checkpoint'):audit(root,inp)
 
+    def test_audit_accepts_long_input_token_counts(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            inp, rows = self.artifacts(root)
+            for row in rows:
+                row["input_tokens"] = 8192
+            (root / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+            self.assertEqual(audit(root, inp)[2]["rows"], 16)
+
     def test_reject_duplicate_and_extra_activation_files(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);inp,rows=self.artifacts(root)
