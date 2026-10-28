@@ -58,7 +58,7 @@ python3 -m unittest discover -s tests -v
 python3 -m pytest tests/test_metrics.py -q
 ```
 
-**GPU inference:** install `requirements.txt` (or Colab cells in `notebooks/step_zero.ipynb`), then `pip install -e .` so notebooks and scripts resolve `refusal_cues`.
+**GPU inference:** `python3 -m pip install -r requirements.txt` and `python3 -m pip install -e ".[inference]"` (or the Colab cells in `notebooks/step_zero.ipynb`). Both declare `mistral-common`, which Ministral needs for `MistralCommonBackend`. `pip install -e ".[analysis]"` does not install it.
 
 ## Quick commands
 
@@ -102,7 +102,7 @@ The judge evaluates an existing response; it is not asked to fulfil the saved re
 ## Google Colab
 
 1. Open [step_zero.ipynb](notebooks/step_zero.ipynb) or [pilot.ipynb](notebooks/pilot.ipynb) and select a GPU runtime.
-2. Clone the repo, run `pip install -e ".[analysis]"` plus inference dependencies (see notebook cells).
+2. Clone the repo and install GPU deps with `pip install -r requirements.txt` and `pip install -e ".[inference]"` (includes `mistral-common` for Ministral). Notebook cells in `notebooks/step_zero.ipynb` install the same package.
 3. Run unit tests and a dry-run or full inference cell.
 4. Download artifact archives before the runtime expires.
 

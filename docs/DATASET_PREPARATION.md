@@ -43,7 +43,12 @@ Use a local HF-shaped JSONL instead of downloading:
 python3 scripts/adapt_hf_dataset.py --input /path/to/development.jsonl --split development --out data/processed/development_inputs.jsonl
 ```
 
-**Colab development screen (B/R only, both models)** — after `pip install -e ".[analysis]"` plus GPU deps from `requirements.txt`:
+**Colab development screen (B/R only, both models)** — install GPU deps first. `requirements.txt` and `pip install -e ".[inference]"` both include `mistral-common`, which Ministral needs for `MistralCommonBackend`. The analysis extra does not.
+
+```sh
+python3 -m pip install -r requirements.txt
+python3 -m pip install -e ".[inference]"
+```
 
 ```sh
 python3 scripts/adapt_hf_dataset.py --split development

@@ -3,6 +3,8 @@
 # OUTPUT_PROTOCOL defaults to native_v1. For a forced A/B first token on every
 # model in this script: OUTPUT_PROTOCOL=ab_first_token_v1 bash scripts/run_development_screen.sh
 # Gemma only: see the ab_first_token_v1 command in docs/DATASET_PREPARATION.md.
+# Ministral needs mistral-common: pip install -r requirements.txt
+# or pip install -e ".[inference]" before this script.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

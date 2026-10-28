@@ -38,9 +38,18 @@ class Runner:
         cls = getattr(tr, arch, None)
         if cls is None:
             raise RuntimeError(f"Installed transformers lacks native architecture {arch}; update then rerun smoke checks")
-        self.processor = (tr.MistralCommonBackend.from_pretrained(model_id, revision=self.revision)
-                          if model_id.startswith("mistralai/Ministral") else
-                          tr.AutoProcessor.from_pretrained(model_id, revision=self.revision, trust_remote_code=False))
+        if model_id.startswith("mistralai/Ministral"):
+            try:
+                self.processor = tr.MistralCommonBackend.from_pretrained(model_id, revision=self.revision)
+            except ImportError as exc:
+                raise ImportError(
+                    "Ministral requires mistral-common for MistralCommonBackend. "
+                    "From the repo root: python3 -m pip install -r requirements.txt "
+                    "or python3 -m pip install -e \".[inference]\""
+                ) from exc
+        else:
+            self.processor = tr.AutoProcessor.from_pretrained(
+                model_id, revision=self.revision, trust_remote_code=False)
         self.tokenizer = (self.processor if model_id.startswith("mistralai/Ministral")
                           else self.processor.tokenizer)
         print(f"Loading {arch} at {self.revision} with NF4/{compute_dtype}", flush=True)

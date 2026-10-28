@@ -57,7 +57,7 @@ The `native`, `content` and `strict` baselines differ in the judging instruction
 
 ## 4. Load one pinned model on the GPU
 
-`Runner.__init__()` resolves the requested Hugging Face revision to an immutable commit. It loads the checkpoint's native Transformers architecture and processor/tokenizer, then records their identities and software versions.
+`Runner.__init__()` resolves the requested Hugging Face revision to an immutable commit. It loads the checkpoint's native Transformers architecture and processor/tokenizer, then records their identities and software versions. Ministral uses `MistralCommonBackend`, which needs the `mistral-common` package (`requirements.txt` and the `inference` extra). `pip install -e ".[analysis]"` does not install it.
 
 Weights use **4-bit NF4 with double quantization** to reduce GPU memory. Compute precision is a separate setting: BF16 is the research configuration; FP16 is the tested T4 compatibility configuration.
 
