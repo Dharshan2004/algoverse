@@ -18,7 +18,8 @@ def main():
     parser.add_argument('--models', nargs='+', choices=REVISIONS, default=list(REVISIONS))
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args()
-    from protocol import validate_records
+    from refusal_cues.paths import PACKAGE_DIR
+    from refusal_cues.protocol import validate_records
     source = Path(args.input).resolve()
     records = validate_records([json.loads(x) for x in source.read_text().splitlines() if x.strip()])
     if any(r['study_partition'] != 'development' for r in records):
@@ -27,21 +28,20 @@ def main():
         parser.error('Models must be unique')
     root = Path(args.out).resolve()
     root.mkdir(parents=True, exist_ok=False)
-    repo = Path(__file__).resolve().parent
     manifest = {'purpose': 'exploratory_development_pilot', 'data_qualified': False,
         'input_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
         'records': len(records), 'variants': ['B','R','N','R2'],
         'models': args.models, 'revisions': REVISIONS, 'dry_run': args.dry_run,
         'planned_judgments': len(records)*8*len(args.models),
         'identity_calls': 0 if args.dry_run else 2*len(args.models), 'status': 'started',
-        'runner_sha256': hashlib.sha256((repo/'inference.py').read_bytes()).hexdigest(),
-        'protocol_sha256': hashlib.sha256((repo/'protocol.py').read_bytes()).hexdigest()}
+        'runner_sha256': hashlib.sha256((PACKAGE_DIR/'inference.py').read_bytes()).hexdigest(),
+        'protocol_sha256': hashlib.sha256((PACKAGE_DIR/'protocol.py').read_bytes()).hexdigest()}
     def save():
         (root/'pilot_manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     save()
     try:
         for model in args.models:
-            command = [sys.executable, '-u', str(repo/'inference.py'), '--input', str(source),
+            command = [sys.executable, '-u', '-m', 'refusal_cues.inference', '--input', str(source),
                 '--model', model, '--revision', REVISIONS[model], '--compute-dtype', 'bfloat16',
                 '--variants', 'B','R','N','R2', '--out', str(root/model)]
             if args.dry_run:

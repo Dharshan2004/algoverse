@@ -1,7 +1,7 @@
 """Tests with hand-checkable numbers, including the proposal's own hypothetical examples."""
 import math
 import numpy as np
-import metrics as M
+from refusal_cues import metrics as M
 
 
 def code_for(meaning, mapping):

@@ -5,7 +5,7 @@ import json
 import math
 from pathlib import Path
 import torch
-from protocol import MAPPINGS, messages, normalize_native_output, parse, sha, variant
+from refusal_cues.protocol import MAPPINGS, messages, normalize_native_output, parse, sha, variant
 
 def audit(directory):
     root = Path(directory)
@@ -76,7 +76,11 @@ def audit(directory):
     print(json.dumps(result, indent=2))
     return result
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("directory")
     audit(parser.parse_args().directory)
+
+
+if __name__ == "__main__":
+    main()

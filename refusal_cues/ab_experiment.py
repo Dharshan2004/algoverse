@@ -1,8 +1,9 @@
 """Gemma native/constrained comparison based on PR #3, commit 03b32cb."""
 import argparse, hashlib, json, shutil, subprocess, sys
 from pathlib import Path
-from inference import Runner
-from protocol import MODELS, MAPPINGS, POLICY, messages, parse, sha, validate_records, variant
+from refusal_cues.inference import Runner
+from refusal_cues.paths import CONTROLS_AB_V1, PACKAGE_DIR
+from refusal_cues.protocol import MODELS, MAPPINGS, POLICY, messages, parse, sha, validate_records, variant
 BASE='03b32cb2ac6ae6aabf67a6b2da7632c3de852834'
 REVISION='707f0a3b8a3c7ad586ed01e27eafbad8a27dd0f7'
 
@@ -37,11 +38,10 @@ def run_arm(runner, inp, out, protocol):
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--input',required=True);ap.add_argument('--out',required=True)
     args=ap.parse_args();root=Path(args.out);root.mkdir(parents=True,exist_ok=False)
-    src=Path(__file__).resolve().parent
-    shutil.copy2(args.input,root/'candidate_inputs.jsonl');shutil.copy2(src/'controls/ab_v1.jsonl',root/'controls.jsonl')
+    shutil.copy2(args.input,root/'candidate_inputs.jsonl');shutil.copy2(CONTROLS_AB_V1,root/'controls.jsonl')
     source_dir=root/'source';source_dir.mkdir()
     for name in ['inference.py','protocol.py','ab_constraint.py','ab_experiment.py','ab_report.py','pilot_report.py','metrics.py']:
-        shutil.copy2(src/name,source_dir/name)
+        shutil.copy2(PACKAGE_DIR/name,source_dir/name)
     manifest={'base_code_commit':BASE,'source_sha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in source_dir.iterdir()},'planned_judgments':928,'planned_identity_calls':8,'status':'started'}
     (root/'manifest.json').write_text(json.dumps(manifest,indent=2))
     (root/'environment.txt').write_text(subprocess.check_output([sys.executable,'-m','pip','freeze'],text=True))

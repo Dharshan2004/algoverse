@@ -1,0 +1,12 @@
+# Exploratory development pilot defaults (matches refusal_cues.pilot.REVISIONS).
+input: data/processed/candidate_inputs.jsonl
+out: runs/pilot-dev
+models:
+  - ministral
+  - gemma
+revisions:
+  ministral: f6fae9795746f63c9be8344932f01275f3c63734
+  gemma: 707f0a3b8a3c7ad586ed01e27eafbad8a27dd0f7
+variants: [B, R, N, R2]
+compute_dtype: bfloat16
+dry_run: false

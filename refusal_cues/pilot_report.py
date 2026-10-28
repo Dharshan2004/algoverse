@@ -6,8 +6,8 @@ import json
 import math
 from pathlib import Path
 
-from pilot import REVISIONS
-from protocol import MODELS, MAPPINGS, messages, normalize_native_output, parse, sha, validate_records, variant
+from refusal_cues.pilot import REVISIONS
+from refusal_cues.protocol import MODELS, MAPPINGS, messages, normalize_native_output, parse, sha, validate_records, variant
 
 VARIANTS = ('B','R','N','R2')
 
@@ -116,7 +116,7 @@ def main():
     args=ap.parse_args()
     config,rows,audit_result=audit(args.run_directory,args.input,args.check_states)
     # Verify integration with the team's metric schema without rewriting their module.
-    import metrics
+    from refusal_cues import metrics
     table=metrics.Table(adapt_metrics(rows))
     stats=summarize(rows)
     for v,c in [('B','B'),('R','R+B'),('N','N+B'),('R2','R2+B')]:

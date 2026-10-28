@@ -6,7 +6,8 @@ import math
 import re
 import time
 from pathlib import Path
-from protocol import MODELS, MAPPINGS, POLICY, depths, messages, normalize_native_output, parse, sha, validate_records, variant
+from refusal_cues.paths import DEFAULT_EXAMPLES
+from refusal_cues.protocol import MODELS, MAPPINGS, POLICY, depths, messages, normalize_native_output, parse, sha, validate_records, variant
 
 class Runner:
     def __init__(self, model_id, revision="main", compute_dtype="bfloat16"):
@@ -91,7 +92,7 @@ class Runner:
         constrained = output_protocol == "ab_constrained_v1"
         generation_kwargs = {}
         if constrained:
-            from ab_constraint import ABOnlyLogitsProcessor
+            from refusal_cues.ab_constraint import ABOnlyLogitsProcessor
             from transformers import LogitsProcessorList
             max_new_tokens = 1
             generation_kwargs["logits_processor"] = LogitsProcessorList([ABOnlyLogitsProcessor(self.codes)])
@@ -199,7 +200,7 @@ def main():
     ap.add_argument("--compute-dtype", choices=["bfloat16", "float16"], default="bfloat16",
                     help="float16 is an explicitly non-protocol T4 compatibility run")
     ap.add_argument("--revision", default="main", help="Resolved to immutable HF SHA at run start")
-    ap.add_argument("--input", default="examples.jsonl")
+    ap.add_argument("--input", default=str(DEFAULT_EXAMPLES))
     ap.add_argument("--out", default="runs/smoke")
     ap.add_argument("--variants", nargs="+", choices=["B", "R", "N", "R2"], default=["B", "R"])
     ap.add_argument("--baseline", choices=["native", "content", "strict"], default="native")

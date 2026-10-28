@@ -1,10 +1,10 @@
 import argparse
-from protocol import validate_records
+from refusal_cues.protocol import validate_records
 import json
 import hashlib
 import unicodedata
 from pathlib import Path
-from preview_io import read_preview
+from refusal_cues.preview_io import read_preview
 
 parser = argparse.ArgumentParser(description="Convert source preview; human label provenance must be confirmed separately.")
 parser.add_argument('--confirm-human-labels', action='store_true',

@@ -1,0 +1,11 @@
+# GPU inference (Colab / local CUDA). Pin versions when reproducing a recorded run; see docs/TESTING.md.
+torch
+transformers
+accelerate
+bitsandbytes
+huggingface-hub
+mistral-common
+sentencepiece
+numpy
+
+# Analysis-only workflows also install requirements-analysis.txt (or pip install -e ".[analysis]").

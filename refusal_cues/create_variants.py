@@ -1,6 +1,6 @@
 
-from preview_io import read_preview
-from protocol import variant
+from refusal_cues.preview_io import read_preview
+from refusal_cues.protocol import variant
 from pathlib import Path
 import hashlib
 import json

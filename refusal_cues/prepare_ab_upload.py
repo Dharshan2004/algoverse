@@ -5,8 +5,9 @@ from pathlib import Path
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--input',required=True);ap.add_argument('--out',required=True)
-    args=ap.parse_args();repo=Path(__file__).resolve().parent
-    notebook=json.loads((repo/'notebooks/gemma_ab_v1.ipynb').read_text())
+    args=ap.parse_args()
+    from refusal_cues.paths import REPO_ROOT
+    notebook=json.loads((REPO_ROOT/'notebooks/gemma_ab_v1.ipynb').read_text())
     expected=None
     for cell in notebook['cells']:
         if cell['cell_type']!='code':continue
@@ -17,7 +18,7 @@ def main():
     source=Path(args.input)
     if hashlib.sha256(source.read_bytes()).hexdigest()!='ae4f5d179571f290910c688ea59e68dae3110a74eebadd1810bfcaf91deda311':
         raise ValueError('Input differs from the original pilot; create a separate version')
-    frozen = {name: subprocess.check_output(['git','show','20450d80a88942388342cc7440f7b58d9ea36a54:'+name],cwd=repo) for name in expected}
+    frozen = {name: subprocess.check_output(['git','show','20450d80a88942388342cc7440f7b58d9ea36a54:'+name],cwd=REPO_ROOT) for name in expected}
     for name,digest in expected.items():
         if hashlib.sha256(frozen[name]).hexdigest()!=digest:
             raise ValueError('Code differs from frozen experiment: '+name)

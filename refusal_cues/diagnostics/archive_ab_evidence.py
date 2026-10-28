@@ -2,7 +2,9 @@
 import copy,hashlib,json,subprocess
 from pathlib import Path
 
-ROOT=Path(__file__).resolve().parents[1]
+from refusal_cues.paths import CONTROLS_AB_V1, REPO_ROOT
+
+ROOT = REPO_ROOT
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def save(p,x):p.write_text(json.dumps(x,indent=2,allow_nan=False)+'\n')
 def main():
@@ -16,7 +18,7 @@ def main():
   assert sha(r/'source'/name)==h
   assert hashlib.sha256(subprocess.check_output(['git','show','20450d8:'+name],cwd=ROOT)).hexdigest()==h
  assert sha(r/'candidate_inputs.jsonl')==sha(old/'candidate_inputs.jsonl')
- assert sha(r/'controls.jsonl')==sha(ROOT/'controls/ab_v1.jsonl')
+ assert sha(r/'controls.jsonl')==sha(CONTROLS_AB_V1)
  summary=json.loads((out/'summary.json').read_text());remote=json.loads((r/'audit/summary.json').read_text())
  assert summary['arms']==remote['arms']
  assert all(summary['comparisons'][k]==v for k,v in remote['comparisons'].items())

@@ -6,9 +6,9 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from pilot_report import adapt_metrics, audit, summarize
-from pilot import REVISIONS
-from protocol import MODELS, POLICY, messages, sha, variant
+from refusal_cues.pilot import REVISIONS
+from refusal_cues.pilot_report import adapt_metrics, audit, summarize
+from refusal_cues.protocol import MODELS, POLICY, messages, sha, variant
 
 class PilotTests(unittest.TestCase):
     def rows(self):

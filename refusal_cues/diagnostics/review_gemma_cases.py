@@ -6,7 +6,9 @@ def read(p):return [json.loads(x) for x in p.read_text().splitlines() if x.strip
 def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def main():
  ap=argparse.ArgumentParser();ap.add_argument('--out',required=True);args=ap.parse_args()
- root=Path(__file__).resolve().parents[1];old=root/'runs/pilot-2026-10-17';new=root/'runs/gemma-ab-v1-2026-10-18'
+ from refusal_cues.paths import REPO_ROOT
+ root=REPO_ROOT
+ old=root/'runs/pilot-2026-10-17';new=root/'runs/gemma-ab-v1-2026-10-18'
  data=read(old/'candidate_inputs.jsonl');native=read(old/'gemma/results.jsonl');constrained=read(new/'pilot_ab_constrained_v1/results.jsonl')
  idx={(r['source_id'],r['variant'],r['mapping']):r for r in native}
  assert len(idx)==400

@@ -1,0 +1,9 @@
+# Synthetic smoke / dry-run defaults (matches refusal_cues.inference CLI defaults).
+model: gemma
+compute_dtype: bfloat16
+revision: main
+input: data/manifests/examples.jsonl
+out: runs/smoke
+variants: [B, R]
+baseline: native
+dry_run: false

@@ -4,7 +4,7 @@ import re
 import unicodedata
 from pathlib import Path
 
-from preview_io import read_preview
+from refusal_cues.preview_io import read_preview
 
 SEED = "20261004"
 INPUT = Path("data/preview/jailjudge_preview.csv")

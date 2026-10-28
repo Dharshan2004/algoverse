@@ -1,6 +1,6 @@
 import unittest
-from diagnostics.gemma_invalids import redact_patterns
-from protocol import normalize_native_output,parse
+from refusal_cues.diagnostics.gemma_invalids import redact_patterns
+from refusal_cues.protocol import normalize_native_output, parse
 
 class GemmaPilotFailureTests(unittest.TestCase):
     def test_actual_incomplete_output_patterns_have_no_recoverable_answer(self):

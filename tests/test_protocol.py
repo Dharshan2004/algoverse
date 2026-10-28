@@ -1,6 +1,6 @@
 import json
 import unittest
-from protocol import PREFIXES, depths, messages, normalize_native_output, parse, validate_records, variant
+from refusal_cues.protocol import PREFIXES, depths, messages, normalize_native_output, parse, validate_records, variant
 
 class ProtocolTests(unittest.TestCase):
     def test_preserves_utf8_and_whitespace(self):

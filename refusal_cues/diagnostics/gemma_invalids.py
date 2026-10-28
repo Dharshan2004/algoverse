@@ -1,6 +1,6 @@
 """Replay saved Gemma parser failures; report alternatives without relabeling a run.
 
-Run from the repository: python diagnostics/gemma_invalids.py --run runs/.../gemma
+Run from the repository: python scripts/run_gemma_invalids.py --run runs/.../gemma
 No GPU calls. Output contains aggregate counts and output-format fragments only.
 """
 import argparse
@@ -9,8 +9,8 @@ import hashlib
 import json
 from pathlib import Path
 import sys
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from protocol import normalize_native_output, parse
+
+from refusal_cues.protocol import normalize_native_output, parse
 
 def redact_patterns(patterns, allowed):
     redacted = Counter()

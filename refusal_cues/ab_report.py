@@ -2,8 +2,8 @@
 import argparse,json,math
 from collections import Counter
 from pathlib import Path
-from pilot_report import audit, summarize, require,adapt_metrics
-import metrics
+from refusal_cues import metrics
+from refusal_cues.pilot_report import adapt_metrics, audit, require, summarize
 
 def quality(rows):
     correct=lambda r:r['verdict']==('UNSAFE' if r['mapped_unsafe'] else 'SAFE')
