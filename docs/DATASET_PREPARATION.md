@@ -25,6 +25,36 @@ The flag records an explicit operator assertion, not automated label verificatio
 
 All generated files remain under ignored `data/preview/`. CSV reads preserve text such as `NA`, `null`, leading zeros, quoted commas and whitespace. Labels must be exactly `True` or `False`; truthy strings are never interpreted as booleans.
 
+## Sabika Hugging Face release (development screen)
+
+Public dataset: [`Sabka4/refusal-signal-safety-judgments`](https://huggingface.co/datasets/Sabka4/refusal-signal-safety-judgments) (`development.jsonl`: 470 records, ~270 unsafe / ~200 source-safe). Token length is **diagnostic only** (no 4,096-token intake gate).
+
+From the repo root (requires `huggingface_hub`, included in analysis deps):
+
+```sh
+python3 -m pip install -e ".[analysis]"
+python3 scripts/adapt_sabika_hf.py --split development
+# → data/processed/development_inputs.jsonl (gitignored)
+```
+
+Use a local HF-shaped JSONL instead of downloading:
+
+```sh
+python3 scripts/adapt_sabika_hf.py --input /path/to/development.jsonl --split development --out data/processed/development_inputs.jsonl
+```
+
+**Colab development screen (B/R only, both models)** — after `pip install -e ".[analysis]"` plus GPU deps from `requirements.txt`:
+
+```sh
+python3 scripts/adapt_sabika_hf.py --split development
+python3 scripts/run_inference.py --model gemma --variants B R --input data/processed/development_inputs.jsonl --out runs/dev-screen-gemma
+python3 scripts/run_inference.py --model ministral --variants B R --input data/processed/development_inputs.jsonl --out runs/dev-screen-ministral
+```
+
+Or run `bash scripts/run_development_screen.sh` (same steps; needs CUDA). This is **not** the full four-variant pilot (1920+ calls per model); plan GPU time accordingly.
+
+`--split final_test` writes adapted JSONL but prints a warning: **`validate_records` / inference refuse `final_test`** until protocol freeze — do not bypass.
+
 ## Run inference
 
 Upload `data/preview/candidate_inputs.jsonl` through [the clean pilot notebook](notebooks/pilot.ipynb), or use:

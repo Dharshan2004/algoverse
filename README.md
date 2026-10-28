@@ -69,6 +69,7 @@ python3 -m pytest tests/test_metrics.py -q
 | Pilot aggregate report | `python3 scripts/run_pilot_report.py runs/pilot-dev/gemma --input … --check-states --out runs/pilot-dev/reports/gemma` |
 | Synthetic artifact audit | `python3 scripts/audit_smoke.py runs/smoke` |
 | Team metrics checks | `python3 -m pytest tests/test_metrics.py` |
+| Sabika HF → runner JSONL | `python3 scripts/adapt_sabika_hf.py --split development` → `data/processed/development_inputs.jsonl` |
 
 Default fixture path: `data/manifests/examples.jsonl`. YAML defaults live under `configs/` (`pilot.yaml`, `inference_smoke.yaml`).
 
