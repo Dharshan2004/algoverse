@@ -1,6 +1,6 @@
 # Dataset preparation → pilot
 
-Sabika's PR #2 supplies the four preparation scripts. They are incorporated with their original commits, followed by integration safeguards: preserve CSV text literally, reject ambiguous labels, validate converted records before writing, and use the shared protocol for response variants.
+PR #2 supplies the four CSV preview preparation scripts. They are incorporated with their original commits, followed by integration safeguards: preserve CSV text literally, reject ambiguous labels, validate converted records before writing, and use the shared protocol for response variants.
 
 ## Prepare a private candidate sample
 
@@ -25,7 +25,7 @@ The flag records an explicit operator assertion, not automated label verificatio
 
 All generated files remain under ignored `data/preview/`. CSV reads preserve text such as `NA`, `null`, leading zeros, quoted commas and whitespace. Labels must be exactly `True` or `False`; truthy strings are never interpreted as booleans.
 
-## Sabika Hugging Face release (development screen)
+## JAILJUDGE HF release (development screen adapter)
 
 Public dataset: [`Sabka4/refusal-signal-safety-judgments`](https://huggingface.co/datasets/Sabka4/refusal-signal-safety-judgments) (`development.jsonl`: 470 records, ~270 unsafe / ~200 source-safe). Token length is **diagnostic only** (no 4,096-token intake gate).
 
@@ -33,20 +33,20 @@ From the repo root (requires `huggingface_hub`, included in analysis deps):
 
 ```sh
 python3 -m pip install -e ".[analysis]"
-python3 scripts/adapt_sabika_hf.py --split development
+python3 scripts/adapt_hf_dataset.py --split development
 # → data/processed/development_inputs.jsonl (gitignored)
 ```
 
 Use a local HF-shaped JSONL instead of downloading:
 
 ```sh
-python3 scripts/adapt_sabika_hf.py --input /path/to/development.jsonl --split development --out data/processed/development_inputs.jsonl
+python3 scripts/adapt_hf_dataset.py --input /path/to/development.jsonl --split development --out data/processed/development_inputs.jsonl
 ```
 
 **Colab development screen (B/R only, both models)** — after `pip install -e ".[analysis]"` plus GPU deps from `requirements.txt`:
 
 ```sh
-python3 scripts/adapt_sabika_hf.py --split development
+python3 scripts/adapt_hf_dataset.py --split development
 python3 scripts/run_inference.py --model gemma --variants B R --input data/processed/development_inputs.jsonl --out runs/dev-screen-gemma
 python3 scripts/run_inference.py --model ministral --variants B R --input data/processed/development_inputs.jsonl --out runs/dev-screen-ministral
 ```
@@ -63,7 +63,7 @@ Upload `data/preview/candidate_inputs.jsonl` through [the clean pilot notebook](
 python scripts/run_pilot.py --input data/preview/candidate_inputs.jsonl --out runs/new-pilot
 ```
 
-The runner generates B/R/N/R2 itself; `variants.jsonl` is an optional inspection artifact, not its input. The actual 17 October pilot used Sabika's previously shared JSONL, not a regenerated sample from these integrated scripts. Historical outputs are unchanged. See [PILOT.md](PILOT.md) for GPU setup and full artifact auditing.
+The runner generates B/R/N/R2 itself; `variants.jsonl` is an optional inspection artifact, not its input. The actual 17 October pilot used a previously shared candidate JSONL, not a regenerated sample from these integrated scripts. Historical outputs are unchanged. See [PILOT.md](PILOT.md) for GPU setup and full artifact auditing.
 
 ## Integration validation
 

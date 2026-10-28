@@ -1,4 +1,4 @@
-"""Exercise Sabika's file pipeline against source-preservation edge cases."""
+"""Exercise the CSV preview intake pipeline against source-preservation edge cases."""
 import json
 from pathlib import Path
 import subprocess

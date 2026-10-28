@@ -1,4 +1,4 @@
-"""Adapt Sabika's Hugging Face release to the refusal_cues runner JSONL schema."""
+"""Adapt the JAILJUDGE HF release (Sabka4/refusal-signal-safety-judgments) to runner JSONL."""
 from __future__ import annotations
 
 import json

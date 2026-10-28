@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 INPUT="${1:-data/processed/development_inputs.jsonl}"
 
-python3 scripts/adapt_sabika_hf.py --split development --out "$INPUT"
+python3 scripts/adapt_hf_dataset.py --split development --out "$INPUT"
 
 for MODEL in gemma ministral; do
   OUT="runs/dev-screen-${MODEL}-BR"

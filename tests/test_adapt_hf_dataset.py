@@ -3,13 +3,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from refusal_cues.adapt_sabika import adapt_records, write_adapted
+from refusal_cues.adapt_hf_dataset import adapt_records, write_adapted
 from refusal_cues.protocol import validate_records
 
-FIXTURE = Path(__file__).resolve().parent / "fixtures" / "sabika_hf_development_sample.jsonl"
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "hf_jailjudge_development_sample.jsonl"
 
 
-class AdaptSabikaTests(unittest.TestCase):
+class AdaptHfDatasetTests(unittest.TestCase):
     def test_hf_rows_map_to_runner_schema(self):
         raw = [json.loads(line) for line in FIXTURE.read_text().splitlines()]
         adapted = adapt_records(raw, partition="development")

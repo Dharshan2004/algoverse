@@ -26,9 +26,9 @@ algoverse/
     controls/ab_v1.jsonl      # authored clean controls for A/B protocol
     raw/ processed/           # local HF exports (gitignored; .gitkeep only)
   refusal_cues/               # importable package (protocol, inference, metrics, …)
-    directions/               # probe/direction hooks (Mehrage); README stub
+    directions/               # probe / direction loaders (placeholder)
     diagnostics/              # offline replay on saved runs
-  scripts/                    # thin CLIs → refusal_cues (stable teammate entrypoints)
+  scripts/                    # thin CLIs → refusal_cues
   notebooks/                  # Colab workflows
   docs/                       # SETUP, PILOT, INFERENCE_GUIDE, TESTING, …
   reports/                    # historical audited summaries (tracked)
@@ -36,15 +36,15 @@ algoverse/
   tests/                      # unittest + pytest (metrics)
 ```
 
-**Role ownership**
+**Functional areas**
 
-| Area | Owner |
+| Area | Primary paths |
 |---|---|
-| Inference runner, Colab, audits | Priyadharshan |
-| Dataset intake, preview pipeline | Sabika |
-| Refusal directions / probes | Mehrage (Sayed) — `refusal_cues/directions/` |
-| Evaluation metrics | Hemanya, Laasya — `refusal_cues/metrics.py` |
-| Research guidance | Pratham |
+| Inference runner, Colab workflows, artifact audits | `refusal_cues/inference.py`, `scripts/run_inference.py`, `notebooks/` |
+| Dataset intake (CSV preview + HF adapter) | `scripts/prepare_preview.py`, `scripts/adapt_hf_dataset.py`, `docs/DATASET_PREPARATION.md` |
+| Refusal directions / probes | `refusal_cues/directions/` |
+| Evaluation metrics | `refusal_cues/metrics.py`, `tests/test_metrics.py` |
+| Research protocol (hosted site) | [Protocol](https://refusal-wording-safety-judgments.dharshanlab.chatgpt.site/), `docs/SETUP.md` |
 
 ## Install
 
@@ -69,7 +69,7 @@ python3 -m pytest tests/test_metrics.py -q
 | Pilot aggregate report | `python3 scripts/run_pilot_report.py runs/pilot-dev/gemma --input … --check-states --out runs/pilot-dev/reports/gemma` |
 | Synthetic artifact audit | `python3 scripts/audit_smoke.py runs/smoke` |
 | Team metrics checks | `python3 -m pytest tests/test_metrics.py` |
-| Sabika HF → runner JSONL | `python3 scripts/adapt_sabika_hf.py --split development` → `data/processed/development_inputs.jsonl` |
+| JAILJUDGE HF → runner JSONL | `python3 scripts/adapt_hf_dataset.py --split development` → `data/processed/development_inputs.jsonl` |
 
 Default fixture path: `data/manifests/examples.jsonl`. YAML defaults live under `configs/` (`pilot.yaml`, `inference_smoke.yaml`).
 
@@ -121,7 +121,7 @@ The notebook defaults to **FP16 on a T4 for synthetic compatibility testing**. T
 | `--baseline` | `native` | `native`, `content`, or `strict` judging instruction. |
 | `--dry-run` | Off | Write planned prompts without loading a model. |
 
-See [docs/INFERENCE_GUIDE.md](docs/INFERENCE_GUIDE.md) and [docs/PILOT.md](docs/PILOT.md) for full workflows. For Sabika's source-data pipeline, see [docs/DATASET_PREPARATION.md](docs/DATASET_PREPARATION.md).
+See [docs/INFERENCE_GUIDE.md](docs/INFERENCE_GUIDE.md) and [docs/PILOT.md](docs/PILOT.md) for full workflows. For dataset intake (CSV preview and HF release), see [docs/DATASET_PREPARATION.md](docs/DATASET_PREPARATION.md).
 
 ## Input contract
 
