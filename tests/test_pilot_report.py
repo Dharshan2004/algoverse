@@ -6,9 +6,9 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from pilot_report import adapt_metrics, audit, summarize
-from pilot import REVISIONS
-from protocol import MODELS, POLICY, messages, sha, variant
+from refusal_cues.pilot import REVISIONS
+from refusal_cues.pilot_report import adapt_metrics, audit, summarize
+from refusal_cues.protocol import MODELS, POLICY, messages, sha, variant
 
 class PilotTests(unittest.TestCase):
     def rows(self):
@@ -81,6 +81,15 @@ class PilotTests(unittest.TestCase):
             for row in rows:row['model_revision']=config['revision']
             (root/'results.jsonl').write_text(''.join(json.dumps(r)+'\n' for r in rows))
             with self.assertRaisesRegex(ValueError,'Unapproved pilot checkpoint'):audit(root,inp)
+
+    def test_audit_accepts_long_input_token_counts(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            inp, rows = self.artifacts(root)
+            for row in rows:
+                row["input_tokens"] = 8192
+            (root / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+            self.assertEqual(audit(root, inp)[2]["rows"], 16)
 
     def test_reject_duplicate_and_extra_activation_files(self):
         with tempfile.TemporaryDirectory() as d:

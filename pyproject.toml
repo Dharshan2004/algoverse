@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "refusal-cues"
+version = "0.1.0"
+description = "Algoverse refusal-wording safety judgment inference and metrics"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+analysis = [
+  "numpy==2.5.4",
+  "pandas==3.0.6",
+]
+inference = [
+  "torch",
+  "transformers",
+  "accelerate",
+  "bitsandbytes",
+  "huggingface-hub",
+  "mistral-common",
+  "sentencepiece",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["refusal_cues*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

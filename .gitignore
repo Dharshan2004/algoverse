@@ -4,7 +4,6 @@ __pycache__/
 .env.*
 .venv/
 runs/
-data/
 *.pt
 *.safetensors
 *.bin
@@ -15,3 +14,23 @@ results.jsonl
 planned_inputs.jsonl
 *.zip
 JAILJUDGE_ID.json
+
+# Large or private outputs (keep small manifests under data/manifests/ and data/controls/)
+results/*
+!results/.gitkeep
+!results/README.md
+artifacts/*
+!artifacts/.gitkeep
+activations/
+
+# Local dataset trees (tracked manifests only under data/manifests/ and data/controls/)
+data/preview/
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Build / packaging
+*.egg-info/
+dist/
+build/

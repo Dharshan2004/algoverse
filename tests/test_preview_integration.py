@@ -5,13 +5,14 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from protocol import validate_records,variant
+from refusal_cues.protocol import validate_records, variant
 
-REPO=Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[1]
+SCRIPTS = REPO / "scripts"
 
 class PreviewIntegrationTests(unittest.TestCase):
     def run_script(self,name,cwd,*args,ok=True):
-        result=subprocess.run([sys.executable,str(REPO/name),*args],cwd=cwd,capture_output=True,text=True)
+        result=subprocess.run([sys.executable, str(SCRIPTS / name), *args], cwd=cwd, capture_output=True, text=True)
         if ok:self.assertEqual(result.returncode,0,result.stderr)
         else:self.assertNotEqual(result.returncode,0,result.stdout)
         return result
@@ -40,7 +41,7 @@ class PreviewIntegrationTests(unittest.TestCase):
                 self.assertEqual(row['variant_response'],variant(row['original_response'],row['variant_id'].split('+')[0])['assistant_response'])
 
     def test_csv_rejects_ambiguous_label_and_blank_response(self):
-        from preview_io import read_preview
+        from refusal_cues.preview_io import read_preview
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp)/'preview.csv'
             for label,body in [('unknown','valid'),('False','')]:

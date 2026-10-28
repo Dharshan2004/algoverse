@@ -1,7 +1,7 @@
 import unittest
 import torch
-from ab_constraint import ABOnlyLogitsProcessor
-from ab_report import quality
+from refusal_cues.ab_constraint import ABOnlyLogitsProcessor
+from refusal_cues.ab_report import quality
 
 class ABTests(unittest.TestCase):
     def test_mask_excludes_highest_noncode_and_preserves_raw_scores(self):
