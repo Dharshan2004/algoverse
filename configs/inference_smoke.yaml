@@ -6,4 +6,5 @@ input: data/manifests/examples.jsonl
 out: runs/smoke
 variants: [B, R]
 baseline: native
+output_protocol: native_v1
 dry_run: false

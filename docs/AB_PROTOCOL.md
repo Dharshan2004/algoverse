@@ -11,3 +11,5 @@ Controls are authored policy examples, four safe and four unsafe, each with a di
 Audits validate every condition, hashes, input/body preservation, parser and probability arithmetic, six finite state vectors, identity equality, raw constrained token identity and agreement with raw A/B argmax. Paired comparisons verify matching prompt/token hashes and model revisions. Prefill states and original logits are compared across protocols. Audits do not assert dataset scientific qualification.
 
 Report format validity separately from source-label accuracy (INVALID counts as incorrect), valid-only accuracy with its changing denominator, unsafe false-safe rate/recall, safe specificity/false alarms, per-mapping behavior, original invalid transitions, changes among previously valid answers and native rerun drift. No confidence intervals or causal claims on unreviewed families.
+
+`ab_first_token_v1` is a separate judging option, not this frozen arm. It constrains only the first token and allows trailing text. Run it from `scripts/run_inference.py --output-protocol ab_first_token_v1`. See [INFERENCE_GUIDE.md](INFERENCE_GUIDE.md).

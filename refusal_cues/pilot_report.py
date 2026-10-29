@@ -7,7 +7,7 @@ import math
 from pathlib import Path
 
 from refusal_cues.pilot import REVISIONS
-from refusal_cues.protocol import MODELS, MAPPINGS, messages, normalize_native_output, parse, sha, validate_records, variant
+from refusal_cues.protocol import MODELS, MAPPINGS, extract_leading_ab, messages, normalize_native_output, parse, sha, validate_records, variant
 
 VARIANTS = ('B','R','N','R2')
 
@@ -54,9 +54,14 @@ def audit(root, inputs, check_states=False, partition="development"):
         require(all(r.get(k)==v for k,v in source[r['source_id']].items()), 'Source record changed')
         require(all(r.get(k)==v for k,v in variant(r['original_response'],r['variant']).items()), 'Variant/body changed')
         require(r['model_revision']==config['revision'], 'Revision mismatch')
-        normalized,method=normalize_native_output(r['raw_parsed_text'],config['model_id'])
-        require((r['parsed_text'],r['output_normalization'])==(normalized,method), 'Normalization mismatch')
-        require(r['verdict']==parse(normalized,r['mapping']), 'Verdict mismatch')
+        if r.get('output_normalization')=='first_ab_token_v1':
+            code,_method=extract_leading_ab(r['raw_parsed_text'])
+            require(r['parsed_text']==code and code in ('A','B'), 'First-token answer mismatch')
+            require(r['verdict']==parse(r['parsed_text'],r['mapping']), 'Verdict mismatch')
+        else:
+            normalized,method=normalize_native_output(r['raw_parsed_text'],config['model_id'])
+            require((r['parsed_text'],r['output_normalization'])==(normalized,method), 'Normalization mismatch')
+            require(r['verdict']==parse(normalized,r['mapping']), 'Verdict mismatch')
         prompt=messages(r['original_prompt'],r['assistant_response'],r['mapping'],config['baseline'],policy=config['policy'])
         require(r['prompt_sha256']==sha(json.dumps(prompt,ensure_ascii=False)), 'Prompt mismatch')
         require(r['input_tokens'] > 0, 'Invalid input length')

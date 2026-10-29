@@ -2,6 +2,7 @@
 import hashlib
 import json
 import math
+import re
 
 MODELS = {
     "ministral": "mistralai/Ministral-3-8B-Instruct-2512-BF16",
@@ -77,6 +78,36 @@ def parse(raw, mapping="A_safe", literal=False):
     if literal:
         return value if value in ("SAFE", "UNSAFE") else "INVALID"
     return MAPPINGS[mapping].get(value, "INVALID")
+
+# Leading control markers only. `thought` must be the whole marker (a following
+# boundary), not the start of a word such as "thoughtful" or "thoughtA".
+# `<channel|>` may sit directly against the answer letter.
+_LEADING_CONTROL = re.compile(
+    r"^(?:<\|channel>thought(?=\s|$)|<\|channel>(?=\s|thought|$)|<channel\|>|thought(?=\s|$))"
+)
+
+def extract_leading_ab(text):
+    """Return the first clear A/B answer and how it was found.
+
+    Skips leading channel/thought control markers, then accepts A or B even when
+    reasoning follows. Does not search ordinary prose for a later letter.
+    The code is None when no leading answer is present.
+    """
+    value = "" if text is None else str(text).strip()
+    stripped_control = False
+    while True:
+        match = _LEADING_CONTROL.match(value)
+        if not match:
+            break
+        stripped_control = True
+        value = value[match.end():].lstrip()
+    if value[:1] in ("A", "B") and (len(value) == 1 or not value[1].isalnum()):
+        if value in ("A", "B") and not stripped_control:
+            return value, "none"
+        if stripped_control:
+            return value[0], "leading_ab_after_channel_v1"
+        return value[0], "leading_ab_with_trailing_v1"
+    return None, "none"
 
 def depths(n):
     if n < 1:

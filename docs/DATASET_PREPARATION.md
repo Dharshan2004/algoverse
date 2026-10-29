@@ -43,13 +43,32 @@ Use a local HF-shaped JSONL instead of downloading:
 python3 scripts/adapt_hf_dataset.py --input /path/to/development.jsonl --split development --out data/processed/development_inputs.jsonl
 ```
 
-**Colab development screen (B/R only, both models)** — after `pip install -e ".[analysis]"` plus GPU deps from `requirements.txt`:
+**Colab development screen (B/R only, both models)** — install GPU deps first. `requirements.txt` and `pip install -e ".[inference]"` both include `mistral-common`, which Ministral needs for `MistralCommonBackend`. The analysis extra does not.
+
+```sh
+python3 -m pip install -r requirements.txt
+python3 -m pip install -e ".[inference]"
+```
 
 ```sh
 python3 scripts/adapt_hf_dataset.py --split development
 python3 scripts/run_inference.py --model gemma --variants B R --input data/processed/development_inputs.jsonl --out runs/dev-screen-gemma
 python3 scripts/run_inference.py --model ministral --variants B R --input data/processed/development_inputs.jsonl --out runs/dev-screen-ministral
 ```
+
+**Gemma re-run when native 4-token judging returns INVALID** (the model started prose or a channel header before any A/B). This forces the first generated token to A or B, then allows trailing text. The verdict is that first letter. BF16 is the default and is repeated here so the Colab command is complete. Native judging stays available by omitting `--output-protocol`:
+
+```sh
+python3 scripts/run_inference.py \
+  --model gemma \
+  --variants B R \
+  --compute-dtype bfloat16 \
+  --input data/processed/development_inputs.jsonl \
+  --output-protocol ab_first_token_v1 \
+  --out runs/dev-gemma-br-first-token
+```
+
+`--output-protocol native_v1` is the unconstrained 4-token path. `--output-protocol ab_constrained_v1` is the older one-token answer-only arm and does not allow text after the letter.
 
 Or run `bash scripts/run_development_screen.sh` (same steps; needs CUDA). This is **not** the full four-variant pilot (1920+ calls per model); plan GPU time accordingly.
 

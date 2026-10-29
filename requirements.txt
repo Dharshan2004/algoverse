@@ -1,4 +1,5 @@
 # GPU inference (Colab / local CUDA). Pin versions when reproducing a recorded run; see docs/TESTING.md.
+# Ministral loads through transformers.MistralCommonBackend and requires mistral-common.
 torch
 transformers
 accelerate

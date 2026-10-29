@@ -16,6 +16,7 @@ analysis = [
   "pandas==3.0.6",
   "huggingface_hub>=0.20",
 ]
+# Ministral (MistralCommonBackend) requires mistral-common. The analysis extra does not install it.
 inference = [
   "torch",
   "transformers",
