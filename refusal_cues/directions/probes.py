@@ -10,6 +10,13 @@ Typical use in Colab (with `runner` already loaded):
     recs_b = probes.capture_states(runner, benign_prompts)
     rG = {L: probes.build_direction(recs_u, recs_b, L) for L in runner.depths}
 
+Full answers for refusal behavior (native, then edited conditions), resumable:
+    probes.run_condition(runner, records, "native", "answers.jsonl", states_path="native_states.pt")
+    native = torch.load("native_states.pt")
+    probes.run_condition(runner, records, "remove", "answers.jsonl", layer=L, rG=r)
+    probes.run_condition(runner, records, "random_remove:6201", "answers.jsonl", layer=L, rG=r,
+                         randoms=probes.random_directions(r), native_states=native)
+
 Judge-cue direction from a saved judging run (e.g. the smoke test):
     rows = probes.load_judging_rows("/content/ministral-smoke")
     pairs = probes.pair_judging_rows(rows)
@@ -257,6 +264,157 @@ def matched_removal_amount(h, r):
 
 
 # ---------------------------------------------------------------------------
+# Answering path (full generation, used to measure refusal behavior)
+# ---------------------------------------------------------------------------
+
+MAX_ANSWER_TOKENS = 256
+RECORD_KEYS = ("prompt_id", "group_id", "role", "class", "category", "source_id")
+
+
+def edit_for(condition, layer=None, rG=None, alpha=None, randoms=None, h=None):
+    """Edit for a named condition. All edits act at one layer, final prompt token, prefill only.
+
+    native               no edit
+    remove               remove rG's component
+    add                  add rG with strength alpha (the saved difference length)
+    random_remove:<seed> random direction, moved exactly as far as removing rG would move h
+    random_add:<seed>    random direction, added with the same strength alpha
+    """
+    if condition == "native":
+        return None
+    if condition == "remove":
+        return {"layer": layer, "direction": rG, "mode": "remove"}
+    if condition == "add":
+        return {"layer": layer, "direction": rG, "mode": "add", "amount": float(alpha)}
+    kind, _, seed = condition.partition(":")
+    if kind in ("random_remove", "random_add"):
+        u = randoms[int(seed)]
+        if kind == "random_remove":
+            if h is None:
+                raise ValueError("random_remove needs the native prompt-pass state h at this layer")
+            return {"layer": layer, "direction": u, "mode": "add", "amount": matched_removal_amount(h, rG)}
+        return {"layer": layer, "direction": u, "mode": "add", "amount": float(alpha)}
+    raise ValueError(f"Unknown condition {condition!r}")
+
+
+def edit_audit(edit, h):
+    """What an edit does to the edited direction's coordinate, from the pre-edit state h:
+    coordinate before, signed change, coordinate after, displacement and direction hash."""
+    d = torch.as_tensor(edit["direction"], dtype=torch.float32).cpu()
+    h = h.float().cpu()
+    before = float(h @ d)
+    if edit["mode"] == "remove":
+        change = -before
+    elif edit["mode"] == "add":
+        change = float(edit["amount"])
+    elif edit["mode"] == "replace":
+        change = float((torch.as_tensor(edit["donor"], dtype=torch.float32).cpu() - h) @ d)
+    else:
+        change = 0.0
+    return {"edit_mode": edit["mode"], "edit_layer": edit["layer"],
+            "edit_direction_sha256": direction_hash(d),
+            "edit_coordinate_before": before, "edit_signed_change": change,
+            "edit_coordinate_after": before + change, "edit_displacement": abs(change),
+            "edit_donor_ref": edit.get("donor_ref")}
+
+
+def answer(runner, record, edit=None, condition="native", system=SYSTEM,
+           max_new_tokens=MAX_ANSWER_TOKENS):
+    """Generate one full answer (up to 256 new tokens) and return (log row, prompt-pass states).
+
+    The row keeps the raw output, output IDs, the answer text with only a recognized empty
+    Gemma thought wrapper removed, and empty, length-cap and end-of-answer flags. A length
+    cap alone does not make an answer broken. The refusal reader decides that later.
+    """
+    prompt = record["prompt"]
+    result, states = runner.run(make_turns(prompt, system), max_new_tokens=max_new_tokens, edit=edit)
+    text = result["parsed_text"]
+    row = {k: record[k] for k in RECORD_KEYS if k in record}
+    row.update({
+        "status": "ok",
+        "condition": condition,
+        "answer_text": text,
+        # Thought-channel tags left after the empty wrapper is removed mean the model wrote
+        # real thinking text. Flag it for review rather than letting the reader see tags.
+        "channel_tags_left": any(t in text for t in ("<|channel>", "<channel|>")),
+        "raw_output": result["raw_output"],
+        "output_ids": result["output_ids"],
+        "output_normalization": result.get("output_normalization", "none"),
+        "empty": not text.strip(),
+        "length_cap": result["length_cap"],
+        "end_of_answer": result["end_of_answer"],
+        "n_output_tokens": len(result["output_ids"]),
+        "input_ids_sha256": result["input_ids_sha256"],
+        "runner_edit_log": result.get("edit", {}),
+        "seconds": result["seconds"],
+        "model_id": runner.model_id,
+        "revision": runner.revision,
+        "compute_dtype": runner.meta.get("compute_dtype"),
+        "gpu": runner.meta.get("gpu"),
+        "max_new_tokens": max_new_tokens,
+        "system_prompt_sha256": sha(system),
+    })
+    if edit is not None:
+        row.update(edit_audit(edit, states[edit["layer"]]))   # the runner saves the edit layer pre-edit
+    return row, states
+
+
+def load_answers(path):
+    path = Path(path)
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def run_condition(runner, records, condition, out_path, layer=None, rG=None, alpha=None,
+                  randoms=None, native_states=None, states_path=None, system=SYSTEM,
+                  max_new_tokens=MAX_ANSWER_TOKENS):
+    """Answer every record under one condition, appending one JSONL row per answer.
+
+    Safe to rerun after a disconnect: records already answered under the same condition
+    and layer are skipped. With states_path, each prompt's prompt-pass states are saved
+    by prompt_id. Save them on the native run, because the matched random removals need
+    each prompt's native state (pass them back in as native_states).
+    """
+    out_path = Path(out_path)
+    done = {r["prompt_id"] for r in load_answers(out_path)
+            if r["condition"] == condition and r.get("layer") == layer}
+    saved = torch.load(states_path) if states_path and Path(states_path).exists() else {}
+    unsaved = 0
+    with out_path.open("a", encoding="utf-8") as f:
+        for rec in records:
+            if rec["prompt_id"] in done:
+                continue
+            h = None
+            if native_states is not None and layer is not None:
+                if rec["prompt_id"] not in native_states:
+                    raise KeyError(f"No native state for {rec['prompt_id']}. Run the native condition first.")
+                h = native_states[rec["prompt_id"]][layer]
+            edit = edit_for(condition, layer, rG, alpha, randoms, h)
+            try:
+                row, states = answer(runner, rec, edit=edit, condition=condition,
+                                     system=system, max_new_tokens=max_new_tokens)
+            except ValueError as err:
+                if "exceeds" not in str(err):
+                    raise
+                # Never truncate: log the prompt as skipped and move on
+                row, states = {k: rec[k] for k in RECORD_KEYS if k in rec}, None
+                row.update(status="input_too_long", condition=condition, error=str(err))
+            row["layer"] = layer
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.flush()
+            if states_path is not None and states is not None:
+                saved[rec["prompt_id"]] = dict(states)
+                unsaved += 1
+                if unsaved >= 25:                     # save in batches, not after every prompt
+                    torch.save(saved, states_path)
+                    unsaved = 0
+    if states_path is not None and unsaved:
+        torch.save(saved, states_path)
+    return out_path
+
+
+# ---------------------------------------------------------------------------
 # Saving
 # ---------------------------------------------------------------------------
 
@@ -327,15 +485,37 @@ class _FakeRunner:
             + t(turns[1]["content"]) + t("[/INST]")
         return {"input_ids": torch.tensor([ids])}
 
-    def run(self, turns, max_new_tokens=1):
+    def run(self, turns, max_new_tokens=1, edit=None):
+        """Like Runner.run: saves states at the depths (and the edit layer) before editing,
+        applies the edit at the final position once, and returns answer fields."""
+        if "TOO_LONG" in turns[-1]["content"]:
+            raise ValueError("Complete input exceeds 4096 tokens; never truncate the body")
         ids = self.encode(turns)["input_ids"]
-        x, states = self.embed(ids), {}
+        x, states, log = self.embed(ids), {}, {}
         with torch.no_grad():
             for i, layer in enumerate(self.layers):
                 x = layer(x)
-                if i in self.depths:
-                    states[i] = x[0, -1].float()
-        return {"input_ids_sha256": "fake"}, states
+                if i in self.depths or (edit and i == edit["layer"]):
+                    states[i] = x[0, -1].float().clone()
+                if edit and i == edit["layer"] and edit["mode"] != "identity":
+                    h = x[0, -1].float()
+                    r = torch.as_tensor(edit["direction"], dtype=torch.float32)
+                    if edit["mode"] == "remove":
+                        delta = -(h @ r)
+                    elif edit["mode"] == "add":
+                        delta = torch.tensor(float(edit["amount"]))
+                    else:
+                        delta = (torch.as_tensor(edit["donor"], dtype=torch.float32) - h) @ r
+                    x = x.clone()
+                    x[0, -1] = h + delta * r
+                    log = {"mode": edit["mode"], "layer": i, "displacement": float(delta.abs()),
+                           "direction_sha256": direction_hash(r)}
+        n = min(4, max_new_tokens)
+        text = "fake answer text" if max_new_tokens > 1 else ""
+        return {"input_ids_sha256": "fake", "raw_output": text, "parsed_text": text,
+                "output_ids": list(range(n)), "output_normalization": "none",
+                "length_cap": n == max_new_tokens, "end_of_answer": n < max_new_tokens,
+                "seconds": 0.0, "edit": log}, states
 
 
 def self_test():
@@ -410,6 +590,57 @@ def self_test():
         pass
     edited = rows + [{**rows[1], "edit": {"mode": "remove"}}]
     assert len(pair_judging_rows(edited)) == len(pairs)   # edited rows are ignored
+
+    # Answering path: edits, audit, matched random size, logging and resume
+    import tempfile
+    fake = _FakeRunner()
+    L = fake.depths[1]
+    recs_a = [{"prompt_id": f"p{i}", "prompt": f"please answer question {i} now", "role": "validation",
+               "class": "unsafe_leaning"} for i in range(3)]
+    with tempfile.TemporaryDirectory() as tmp:
+        out, spath = Path(tmp) / "answers.jsonl", Path(tmp) / "native_states.pt"
+        run_condition(fake, recs_a, "native", out, states_path=spath)
+        native_states = torch.load(spath)
+        assert set(native_states) == {"p0", "p1", "p2"}
+        rows = load_answers(out)
+        assert len(rows) == 3 and not rows[0]["empty"] and not rows[0]["length_cap"]
+        assert rows[0]["max_new_tokens"] == MAX_ANSWER_TOKENS and "edit_mode" not in rows[0]
+
+        direction = torch.nn.functional.normalize(torch.randn(8), dim=0)
+        rands = random_directions(direction)
+        run_condition(fake, recs_a, "remove", out, layer=L, rG=direction)
+        run_condition(fake, recs_a, f"random_remove:{SEEDS[0]}", out, layer=L, rG=direction,
+                      randoms=rands, native_states=native_states)
+        run_condition(fake, recs_a, "add", out, layer=L, rG=direction, alpha=2.5)
+        rows = load_answers(out)
+        assert len(rows) == 12
+        rm = {r["prompt_id"]: r for r in rows if r["condition"] == "remove"}
+        rr = {r["prompt_id"]: r for r in rows if r["condition"].startswith("random_remove")}
+        for pid in rm:
+            assert abs(rm[pid]["edit_coordinate_after"]) < 1e-5            # removal zeroes the coordinate
+            assert abs(rm[pid]["edit_displacement"] - rr[pid]["edit_displacement"]) < 1e-5   # matched size
+            assert abs(rm[pid]["edit_displacement"] - rm[pid]["runner_edit_log"]["displacement"]) < 1e-5
+        add_rows = [r for r in rows if r["condition"] == "add"]
+        assert all(abs(r["edit_signed_change"] - 2.5) < 1e-6 for r in add_rows)
+
+        assert all(r["status"] == "ok" and r["channel_tags_left"] is False for r in rows)
+
+        # Rerunning skips work already done
+        run_condition(fake, recs_a, "remove", out, layer=L, rG=direction)
+        assert len(load_answers(out)) == 12
+
+        # An over-long prompt is logged as skipped, never truncated, and not retried
+        long_rec = [{"prompt_id": "p_long", "prompt": "TOO_LONG prompt", "role": "validation"}]
+        run_condition(fake, long_rec, "native", out, states_path=spath)
+        run_condition(fake, long_rec, "native", out, states_path=spath)
+        skipped = [r for r in load_answers(out) if r["prompt_id"] == "p_long"]
+        assert len(skipped) == 1 and skipped[0]["status"] == "input_too_long"
+        assert "p_long" not in torch.load(spath)
+        try:
+            edit_for("random_remove:6201", L, direction, randoms=rands)
+            raise AssertionError("random_remove without h was not caught")
+        except ValueError:
+            pass
 
     # Hash matches the runner's convention
     assert direction_hash(r) == sha(json.dumps(r.cpu().tolist()))
