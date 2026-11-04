@@ -5,16 +5,20 @@ hashes, picks one response per judge-cue family with the plan's fingerprint rule
 and checks overlap with the plan's duplicate rule (Datasets & labels, Section 2,
 "Exact grouping, fingerprint and split rules").
 
-The benign-candidate selection itself is Sabika's decision and is not changed here.
+The benign pool now comes from WildGuardTest (the team's decision), loaded from Sabika's
+WildGuard preparation CSVs. The original BeaverTails benign files are superseded and skipped.
+Pool selection itself is Sabika's work and is not changed here.
 
 Typical use in Colab:
     from refusal_cues.directions import pools
-    paths = pools.download_manifests()
+    paths = pools.download_manifests()                     # BeaverTails unsafe-leaning + judge-cue
     data, report = pools.load_pools(paths)
-    print(report)
+    wg, wg_report = pools.load_wildguard_benign(WG_FOLDER) # folder with the three benign CSVs
+    data.update(wg)
+    print(report, wg_report)
     print(pools.check_counts(data))
     print(pools.overlap_summary(pools.find_duplicates(pools.prompt_groups(data))))
-    pools.write_manifest(data, "/content/beavertails_manifest.jsonl")
+    pools.write_manifest(data, "/content/pools_manifest.jsonl")
 """
 import hashlib
 import json
@@ -46,6 +50,19 @@ EXPECTED = {
     "benign_candidate:estimation": 200, "benign_candidate:layer_selection": 50, "benign_candidate:validation": 100,
     "source_safe:judge_cue": 200, "source_unsafe:judge_cue": 200,
 }
+
+# The BeaverTails benign files were replaced by WildGuardTest benign prompts
+SUPERSEDED = {"training_benign_estimation.jsonl", "training_benign_layer_selection.jsonl",
+              "training_benign_validation.jsonl"}
+
+# Sabika's WildGuard benign files -> (role, value of her "pool" column)
+WILDGUARD_BENIGN = {
+    "wildguard_benign_direction_estimation.csv": ("estimation", "direction_estimation"),
+    "wildguard_benign_layer_selection.csv":      ("layer_selection", "layer_selection"),
+    "wildguard_benign_held_out_validation.csv":  ("validation", "held_out_validation"),
+}
+WILDGUARD_SOURCE = "WildGuardTest (allenai/wildguardmix, wildguardtest, test)"
+WILDGUARD_MANIFEST = "wildguard_reallocation_manifest.json"
 
 
 # ---------------------------------------------------------------------------
@@ -84,12 +101,13 @@ def fingerprint(revision, source_id, response_sha256, seed=SEED):
 # Loading
 # ---------------------------------------------------------------------------
 
-def download_manifests(local_dir="/content/beavertails", revision=REVISION):
-    """Download all eight manifests from the pinned commit. Returns {file name: local path}."""
+def download_manifests(local_dir="/content/beavertails", revision=REVISION, include_superseded=False):
+    """Download the BeaverTails manifests from the pinned commit. Returns {file name: local path}.
+    The superseded BeaverTails benign files are skipped unless asked for."""
     from huggingface_hub import hf_hub_download
     return {name: hf_hub_download(REPO_ID, f"manifests/{name}", repo_type="dataset",
                                   revision=revision, local_dir=local_dir)
-            for name in MANIFESTS}
+            for name in MANIFESTS if include_superseded or name not in SUPERSEDED}
 
 
 def _read_jsonl(path):
@@ -104,7 +122,7 @@ def _field(record, names, what, where):
     raise KeyError(f"{where}: no {what} field (looked for {names}). Fields present: {sorted(record)}")
 
 
-def load_pools(paths, revision=REVISION):
+def load_pools(paths, revision=REVISION, include_superseded=False):
     """Read every manifest, add IDs and hashes, and pick one response per judge-cue family.
 
     Returns (data, report). data maps "class:role" to a list of records. Each record keeps
@@ -114,6 +132,8 @@ def load_pools(paths, revision=REVISION):
     """
     data, report = defaultdict(list), {}
     for name, (role, cls, source) in MANIFESTS.items():
+        if name in SUPERSEDED and not include_superseded:
+            continue
         rows = _read_jsonl(paths[name])
         records = []
         for line_no, raw in enumerate(rows):
@@ -159,6 +179,79 @@ def load_pools(paths, revision=REVISION):
             report[key] = {"records": len(records), "exact_duplicates_within_file": dupes}
             data[key] = records
     return dict(data), report
+
+
+def _read_csv(path):
+    import csv
+    csv.field_size_limit(10 ** 9)
+    with open(path, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def load_wildguard_benign(folder):
+    """Load Sabika's three WildGuard benign CSVs as the benign-candidate pools.
+
+    Returns (data, report). data has "benign_candidate:estimation", ":layer_selection" and
+    ":validation", with the same record fields as the BeaverTails pools plus source_group_id
+    (Sabika's question_group_id), adversarial and prompt_harm_label. If the reallocation
+    manifest is in the same folder, its selected group IDs are checked against the files.
+    """
+    from pathlib import Path
+    folder = Path(folder)
+    data, report, seen_rows = {}, {}, set()
+    for name, (role, pool_value) in WILDGUARD_BENIGN.items():
+        rows = _read_csv(folder / name)
+        problems = Counter()
+        records = []
+        for raw in rows:
+            prompt = raw.get("prompt") or ""
+            if not prompt.strip():
+                problems["blank_prompt"] += 1
+                continue
+            if raw.get("pool") and raw["pool"] != pool_value:
+                problems["wrong_pool_value"] += 1
+            if str(raw.get("prompt_harm_label", "")).lower() != "unharmful":
+                problems["not_unharmful"] += 1
+            if raw["source_row_id"] in seen_rows:
+                problems["repeated_source_row"] += 1
+            seen_rows.add(raw["source_row_id"])
+            records.append({
+                "prompt": prompt,
+                "prompt_sha256": sha256(prompt),
+                "prompt_id": f"wg-{raw['source_row_id']}",
+                "group_id": "g-" + sha256(normalize(prompt))[:16],
+                "source_group_id": raw.get("question_group_id"),
+                "source_id": f"wildguardtest:{raw['source_row_id']}",
+                "role": role,
+                "class": "benign_candidate",
+                "source_dataset": WILDGUARD_SOURCE,
+                "adversarial": str(raw.get("adversarial")).strip().lower() == "true",
+                "prompt_harm_label": raw.get("prompt_harm_label"),
+            })
+        key = f"benign_candidate:{role}"
+        data[key] = records
+        report[key] = {"records": len(records),
+                       "adversarial": sum(r["adversarial"] for r in records),
+                       "problems": dict(problems) or "none"}
+
+    manifest_path = folder / WILDGUARD_MANIFEST
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text())
+        selected = set(manifest["benign_generation"]["selected_question_group_ids"])
+        loaded = {r["source_group_id"] for recs in data.values() for r in recs}
+        seed = manifest.get("random_seed")
+        for recs in data.values():
+            for r in recs:
+                r["selection_seed"] = seed
+        report["manifest"] = {"seed": seed, "group_ids_match_files": selected == loaded}
+    else:
+        report["manifest"] = "not found in folder (group IDs not cross-checked)"
+    return data, report
+
+
+def texts_from_csv(path, field="prompt"):
+    """Pull one text field out of a CSV, for example WildGuard's reader-validation prompts."""
+    return [r[field] for r in _read_csv(path) if r.get(field)]
 
 
 def check_counts(data):
@@ -239,7 +332,8 @@ def overlap_summary(pairs):
 
 ID_FIELDS = ("prompt_id", "group_id", "prompt_sha256", "source_id", "role", "class",
              "source_dataset", "manifest_repo", "manifest_revision", "category",
-             "response_id", "response_sha256", "source_label", "fingerprint")
+             "response_id", "response_sha256", "source_label", "fingerprint",
+             "source_group_id", "adversarial", "prompt_harm_label", "selection_seed")
 
 
 def write_manifest(data, path, include_text=False):
@@ -318,6 +412,71 @@ def self_test():
         rows = _read_jsonl(out)
         assert len(rows) == sum(len(v) for v in data.values())
         assert all("prompt" not in r and "response" not in r for r in rows)
+    # Superseded BeaverTails benign files are skipped by default, loadable on request
+    assert not any(k.startswith("benign_candidate") for k in data)
+    with tempfile.TemporaryDirectory() as tmp2:
+        p2 = {}
+        for name, (role, cls, _) in MANIFESTS.items():
+            rows = ([{"prompt": f"{cls} fam {f}", "response": "r", "is_safe": cls == "source_safe"}
+                     for f in range(2)] if role == "judge_cue"
+                    else [{"prompt": f"{cls} {role} {i}"} for i in range(2)])
+            p2[name] = os.path.join(tmp2, name)
+            open(p2[name], "w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+        old_data, _ = load_pools(p2, revision="test", include_superseded=True)
+        assert "benign_candidate:estimation" in old_data
+
+    # WildGuard benign CSVs
+    import csv
+    with tempfile.TemporaryDirectory() as wg_dir:
+        fields = ["source_row_id", "prompt", "adversarial", "prompt_harm_label", "question_group_id", "pool"]
+        groups, row_id = [], 0
+        for name, (role, pool_value) in WILDGUARD_BENIGN.items():
+            with open(os.path.join(wg_dir, name), "w", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=fields)
+                w.writeheader()
+                for i in range(4):
+                    gid = sha256(f"g{row_id}")
+                    groups.append(gid)
+                    w.writerow({"source_row_id": row_id,
+                                "prompt": f"Plain harmless question {row_id}, with a comma\nand a newline",
+                                "adversarial": "True" if i % 2 else "False",
+                                "prompt_harm_label": "unharmful", "question_group_id": gid,
+                                "pool": pool_value})
+                    row_id += 1
+        json.dump({"random_seed": 20261031,
+                   "benign_generation": {"selected_question_group_ids": sorted(groups)}},
+                  open(os.path.join(wg_dir, WILDGUARD_MANIFEST), "w"))
+        wg, wg_report = load_wildguard_benign(wg_dir)
+        est = wg["benign_candidate:estimation"]
+        assert len(est) == 4 and est[0]["prompt_id"] == "wg-0" and est[0]["role"] == "estimation"
+        assert [r["adversarial"] for r in est] == [False, True, False, True]
+        assert est[0]["prompt"].endswith("and a newline") and est[0]["selection_seed"] == 20261031
+        assert wg_report["manifest"]["group_ids_match_files"] is True
+        assert all(v["problems"] == "none" for k, v in wg_report.items() if k != "manifest")
+
+        # Merging gives the full set of pools, and overlap checks cover WildGuard too
+        merged = {**data, **wg}
+        merged["benign_candidate:validation"].append(dict(merged["unsafe_leaning:estimation"][0]))
+        dup = find_duplicates(prompt_groups(merged))
+        assert any({ga, gb} == {"unsafe_leaning:estimation", "benign_candidate:validation"}
+                   for ga, _, gb, _, _ in dup)
+        rows = _read_jsonl(write_manifest(merged, os.path.join(wg_dir, "m.jsonl")))
+        assert any(r.get("adversarial") is True for r in rows) and all("prompt" not in r for r in rows)
+
+        # Problems in the files are reported, not hidden
+        bad = os.path.join(wg_dir, "bad")
+        os.mkdir(bad)
+        for name, (role, pool_value) in WILDGUARD_BENIGN.items():
+            with open(os.path.join(bad, name), "w", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=fields)
+                w.writeheader()
+                w.writerow({"source_row_id": 1, "prompt": "x", "adversarial": "False",
+                            "prompt_harm_label": "harmful", "question_group_id": "g", "pool": "wrong"})
+        _, bad_report = load_wildguard_benign(bad)
+        est_p = bad_report["benign_candidate:estimation"]["problems"]
+        assert est_p["not_unharmful"] == 1 and est_p["wrong_pool_value"] == 1
+        assert bad_report["benign_candidate:layer_selection"]["problems"]["repeated_source_row"] == 1
+        assert isinstance(bad_report["manifest"], str)
     print("pools.self_test: all checks passed")
 
 
