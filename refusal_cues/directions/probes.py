@@ -268,7 +268,8 @@ def matched_removal_amount(h, r):
 # ---------------------------------------------------------------------------
 
 MAX_ANSWER_TOKENS = 256
-RECORD_KEYS = ("prompt_id", "group_id", "role", "class", "category", "source_id")
+RECORD_KEYS = ("prompt_id", "group_id", "role", "class", "category", "source_id",
+               "source_dataset", "adversarial")
 
 
 def edit_for(condition, layer=None, rG=None, alpha=None, randoms=None, h=None):
