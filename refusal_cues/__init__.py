@@ -3,6 +3,7 @@
 __all__ = [
     "protocol",
     "inference",
+    "guard_judges",
     "pilot",
     "metrics",
     "ab_constraint",

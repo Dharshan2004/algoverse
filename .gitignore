@@ -34,3 +34,8 @@ data/processed/*
 *.egg-info/
 dist/
 build/
+
+# Raw 470-record verdict dumps (summaries under experiments/ stay tracked)
+experiments/**/all_results.csv
+experiments/**/all_results.jsonl
+experiments/**/inputs/
