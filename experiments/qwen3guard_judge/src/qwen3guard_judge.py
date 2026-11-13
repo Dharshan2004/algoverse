@@ -356,12 +356,42 @@ def stable_runtime(meta):
     return {k: v for k, v in meta.items() if k not in ("gpu", "loaded_sgt")}
 
 
+def input_digest(records):
+    """Identity of the judged records: source id, request, response body, and human label.
+
+    Sorted by source id so a reorder of the same records is the same experiment.
+    """
+    payload = [{"source_id": r["source_id"], "original_prompt": r["original_prompt"],
+                "original_response": r["original_response"], "mapped_unsafe": bool(r["mapped_unsafe"])}
+               for r in sorted(records, key=lambda r: r["source_id"])]
+    return sha(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+
+def resume_conflicts(previous, records, cue_text, conditions, repeats, budget):
+    """Names of protocol fields that disagree with verdicts already stored in this folder."""
+    problems = []
+    if previous.get("cue_text") != {c: cue_text.get(c, "") for c in conditions}:
+        problems.append("cue text")
+    if previous.get("repetitions") != repeats:
+        problems.append("repeat count")
+    if previous.get("budget") != budget:
+        problems.append("decoding budget")
+    if previous.get("input_sha256") != input_digest(records):
+        problems.append("input records")
+    return problems
+
+
 def run_behavioral(run_dir, records, cue_text, get_runner, runtime_id=None, conditions=CONDITIONS,
                    repeats=REPEATS, budget=BUDGET, log=print, heartbeat=None, max_new=None,
                    flush_every=FLUSH_EVERY, flush_seconds=FLUSH_SECONDS):
     """Judge every missing (source_id, condition, repeat). Resumable. Results go to Drive as closed
     chunk files of at most `flush_every` rows / `flush_seconds`, so an abrupt VM loss costs at most
-    one unflushed batch; an interrupt (KeyboardInterrupt) flushes the partial batch first."""
+    one unflushed batch; an interrupt (KeyboardInterrupt) flushes the partial batch first.
+
+    A folder that already has verdicts and a manifest is resumed only when the cue text, repeat
+    count, decoding budget, and input-record digest match. A mismatch raises before the manifest
+    is rewritten and before any new judgment is stored.
+    """
     from datetime import datetime
     from pathlib import Path
     folder = Path(run_dir) / "behavioral" / MODEL_KEY
@@ -369,6 +399,13 @@ def run_behavioral(run_dir, records, cue_text, get_runner, runtime_id=None, cond
     message, _ = persisted_message(folder)
     log(message)
     seen = read_verdicts(folder)
+    mpath = folder / "manifest.json"
+    if mpath.exists() and seen:
+        previous = json.loads(mpath.read_text())
+        problems = resume_conflicts(previous, records, cue_text, conditions, repeats, budget)
+        if problems:
+            raise RuntimeError("Saved verdicts used a different " + ", ".join(problems)
+                               + "; start a new run instead of mixing")
     by_id = {r["source_id"]: r for r in records}
     todo = [k for k in behavioral_keys(records, conditions, repeats) if k not in seen]
     log(f"behavioral {MODEL_KEY}: {len(todo)} of {len(seen) + len(todo)} judgments remaining")
@@ -376,12 +413,11 @@ def run_behavioral(run_dir, records, cue_text, get_runner, runtime_id=None, cond
         return seen
     runner = get_runner()
     manifest = {"input_records": len(records), "conditions": conditions, "cue_text": {c: cue_text.get(c, "") for c in conditions},
-                "repetitions": repeats, "seed": SEED, "budget": budget, "runtime": runner.meta}
-    mpath = folder / "manifest.json"
+                "repetitions": repeats, "seed": SEED, "budget": budget, "input_sha256": input_digest(records),
+                "runtime": runner.meta}
     if mpath.exists() and seen:
         previous = json.loads(mpath.read_text())
-        if (previous["cue_text"] != manifest["cue_text"] or previous["repetitions"] != repeats
-                or stable_runtime(previous["runtime"]) != stable_runtime(json.loads(json.dumps(runner.meta)))):
+        if stable_runtime(previous["runtime"]) != stable_runtime(json.loads(json.dumps(runner.meta))):
             raise RuntimeError("Model/software/protocol provenance differs from the verdicts already in this folder; "
                                "start a new run instead of mixing")
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")

@@ -1,6 +1,8 @@
 """Offline checks for the 4-judge activation capture helpers."""
+import base64
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -82,7 +84,14 @@ def test_notebook_code_cells_parse():
         if source.startswith("%%writefile"):
             source = source.split("\n", 1)[1]
         compile(source, f"cell{index}", "exec")
-    joined = "".join("".join(c["source"]) for c in notebook["cells"])
+    sources = ["".join(cell["source"]) for cell in notebook["cells"] if cell["cell_type"] == "code"]
+    joined = "\n".join(sources)
     assert "from refusal_cues.guard_judges import GuardRunner" in joined
     assert "from refusal_cues.guard_judges import guard_messages" in joined
     assert "from refusal_cues.guard_judges import parse_guard" in joined
+    install = next(source for source in sources if "guard_judges.py" in source and "b64decode" in source)
+    imported = next(source for source in sources if "from refusal_cues.guard_judges import GuardRunner" in source)
+    assert sources.index(install) < sources.index(imported)
+    encoded = re.search(r"base64\.b64decode\('([^']+)'\)", install).group(1)
+    repo_module = Path(__file__).resolve().parents[3] / "refusal_cues" / "guard_judges.py"
+    assert base64.b64decode(encoded) == repo_module.read_bytes()

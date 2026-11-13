@@ -20,6 +20,8 @@ Layers follow `refusal_cues.protocol.depths`: Llama Guard `[3, 5, 7, 8, 10, 11]`
 | Colab notebook | `activation_capture.ipynb` |
 | Llama Guard / ShieldGemma runner | `refusal_cues/guard_judges.py` |
 
+Cell 1 writes that module into the extracted `baseline.zip` package before `GuardRunner` is imported. The historical archive does not contain it.
+
 Rebuild the notebook after editing `src/activation_tools.py`:
 
 ```sh

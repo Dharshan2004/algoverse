@@ -16,7 +16,7 @@ This is a self-contained Colab experiment. It adds `Qwen/Qwen3Guard-Gen-8B` (bf1
 | `tests/notebook_cpu_full.py` | Optional notebook execution on CPU with mocked Colab and `Qwen3Guard-Gen-0.6B`. |
 
 ## Protocol
-- **Conversation:** `[user: request, assistant: response]` with string contents. This is identical to `refusal_cues.guard_judges.guard_messages` for a non-Llama-Guard guard.
+- **Conversation:** `[user: request, assistant: response]` with string contents. This is identical to `refusal_cues.guard_judges.guard_messages` for a non-Llama-Guard guard. Cell 1 writes that module into the extracted `baseline.zip` package before the preflight imports it.
 - **Response:** the body for B; `cue + "\n\n" + body` for the other conditions.
 - **Template:** the model's own chat template (response-moderation branch, fixed native policy).
 - **Decoding:** greedy, 256-token budget, seed `20261004 + repeat`.

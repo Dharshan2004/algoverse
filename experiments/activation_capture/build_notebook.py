@@ -1,8 +1,21 @@
 """Builds activation_capture.ipynb from cell sources + src/activation_tools.py."""
+import base64
 import nbformat as nbf
 from pathlib import Path
 HERE = Path(__file__).parent
 TOOLS = (HERE / 'src/activation_tools.py').read_text()
+GUARD_B64 = base64.b64encode((HERE.parents[1] / "refusal_cues" / "guard_judges.py").read_bytes()).decode()
+INSTALL_GUARD = (
+    "import base64\n"
+    "guard_pkg = SOURCE / 'refusal_cues'\n"
+    "guard_pkg.mkdir(parents=True, exist_ok=True)\n"
+    f"(guard_pkg / 'guard_judges.py').write_bytes(base64.b64decode({GUARD_B64!r}))\n"
+    "init = guard_pkg / '__init__.py'\n"
+    "if not init.exists():\n"
+    "    init.write_text('')\n"
+    "sys.modules.pop('refusal_cues.guard_judges', None)\n"
+    "print('Installed refusal_cues.guard_judges into the extracted baseline package')\n"
+)
 
 INTRO = r"""# JAILJUDGE refusal-cue study: residual-stream activation capture
 Captures activations for **all four judges** (Llama Guard 3 1B, ShieldGemma 2B, Ministral 3 8B, Gemma 4 12B) on **all 470 development records** under **B, N, R, R2, paper_R1, paper_R2, paper_Rgreet**, for activation probing and patching. Guards use native labels; chat judges use both letter mappings (A_safe, A_unsafe). One greedy pass per prompt: 470 × 7 × (1+1+2+2) = **19,740 prompts**.
@@ -59,7 +72,9 @@ with zipfile.ZipFile(archive) as z:
     for entry in z.infolist():
         assert (SOURCE / entry.filename).resolve().is_relative_to(SOURCE.resolve())
     z.extractall(SOURCE)
-if str(SOURCE) not in sys.path:
+# baseline.zip predates refusal_cues.guard_judges. Install this repository's copy
+# into the extracted package, which is the sys.path entry used for GuardRunner.
+""" + INSTALL_GUARD + r"""if str(SOURCE) not in sys.path:
     sys.path.insert(0, str(SOURCE))
 raw = (SOURCE / 'data/processed/jailjudge_screen.jsonl').read_bytes()
 assert hashlib.sha256(raw).hexdigest() == DATA_SHA256, 'Unexpected dataset revision'

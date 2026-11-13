@@ -1,8 +1,21 @@
 """Builds qwen3guard_experiment.ipynb from the cell sources below + src/*.py."""
+import base64
 import nbformat as nbf
 from pathlib import Path
 HERE = Path(__file__).parent
 SRC = {name: (HERE / 'src' / name).read_text() for name in ('qwen3guard_judge.py', 'activation_tools.py', 'judge_metrics.py')}
+GUARD_B64 = base64.b64encode((HERE.parents[1] / "refusal_cues" / "guard_judges.py").read_bytes()).decode()
+INSTALL_GUARD = (
+    "import base64\n"
+    "guard_pkg = SOURCE / 'refusal_cues'\n"
+    "guard_pkg.mkdir(parents=True, exist_ok=True)\n"
+    f"(guard_pkg / 'guard_judges.py').write_bytes(base64.b64decode({GUARD_B64!r}))\n"
+    "init = guard_pkg / '__init__.py'\n"
+    "if not init.exists():\n"
+    "    init.write_text('')\n"
+    "sys.modules.pop('refusal_cues.guard_judges', None)\n"
+    "print('Installed refusal_cues.guard_judges into the extracted baseline package')\n"
+)
 
 INTRO = r"""# Qwen3Guard judge: behavioral run + residual-stream capture (refusal-cue study)
 Replaces the Ministral chat judge with the guard model **`Qwen/Qwen3Guard-Gen-8B`** (bf16, native labels) on the same **470 JAILJUDGE development records** under **B, N, R, R2, paper_R1, paper_R2, paper_Rgreet**.
@@ -14,7 +27,7 @@ Replaces the Ministral chat judge with the guard model **`Qwen/Qwen3Guard-Gen-8B
 **Run order:** 1 → 2a → 2b → 2c → 3 → 4 → 6 → 7 → 9 → 10 → 11. *Runtime → Run all* does the same, since markdown cells and the optional cell 13 do nothing.
 **After a disconnect:** reconnect an **L4**, keep `START_NEW_RUN=False`, and run the same order again (or Run all). Cell 6 continues from the last saved judgment. Cell 9 skips finished shards, so at most one 47-record shard is redone. Never run two runtimes on one output folder; a heartbeat lock enforces this.
 
-Requirements: Colab **L4** (24 GB) or A100. Drive `MyDrive/algoverse-jailjudge-inputs/baseline.zip` (already there from the 4-model run). The 4-model `jailjudge-full-470-results.zip` is found automatically in `MyDrive/algoverse-jailjudge-outputs/*/`, for the cue check and the combined table. Qwen3Guard is **not gated** (Apache-2.0), so the `HF_TOKEN` secret is optional; it only raises download rate limits."""
+Requirements: Colab **L4** (24 GB) or A100. Drive `MyDrive/algoverse-jailjudge-inputs/baseline.zip` (already there from the 4-model run). Cell 1 writes `refusal_cues/guard_judges.py` from this repository into that extracted package before the preflight imports it. The 4-model `jailjudge-full-470-results.zip` is found automatically in `MyDrive/algoverse-jailjudge-outputs/*/`, for the cue check and the combined table. Qwen3Guard is **not gated** (Apache-2.0), so the `HF_TOKEN` secret is optional; it only raises download rate limits."""
 
 CELL1 = r"""# 1. Settings, Drive, output folder, inputs. No GPU work.
 from pathlib import Path
@@ -66,7 +79,9 @@ with zipfile.ZipFile(archive) as z:
     for entry in z.infolist():
         assert (SOURCE / entry.filename).resolve().is_relative_to(SOURCE.resolve())
     z.extractall(SOURCE)
-for p in (str(SOURCE), '/content'):
+# baseline.zip predates refusal_cues.guard_judges. Install this repository's copy
+# into the extracted package before preflight imports guard_messages.
+""" + INSTALL_GUARD + r"""for p in (str(SOURCE), '/content'):
     if p not in sys.path: sys.path.insert(0, p)
 raw = (SOURCE / 'data/processed/jailjudge_screen.jsonl').read_bytes()
 assert hashlib.sha256(raw).hexdigest() == DATA_SHA256, 'Unexpected dataset revision'

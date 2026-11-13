@@ -88,7 +88,7 @@ Open `qwen3guard_experiment.ipynb` on an L4 and run cells 1 → 2a → 2b → 2c
 
 | Judge | Inference | Activations |
 |---|---|---|
-| Llama Guard 3 1B | `refusal_cues/guard_judges.py` — `GuardRunner`, `guard_messages` (typed text blocks), `parse_guard` | `experiments/activation_capture/src/activation_tools.py` (`build_turns`, `capture_one`, `run_capture`, `verdict_with_residual_patch`) |
+| Llama Guard 3 1B | `refusal_cues/guard_judges.py` — `GuardRunner`, `guard_messages` (typed text blocks), `parse_guard`. Both Colab notebooks write this file into the extracted `baseline.zip` package before importing it | `experiments/activation_capture/src/activation_tools.py` (`build_turns`, `capture_one`, `run_capture`, `verdict_with_residual_patch`) |
 | ShieldGemma 2B | `refusal_cues/guard_judges.py` — `GuardRunner`, `guard_messages` (string contents), Yes/No score in `GuardRunner.run` | same capture module |
 | Gemma 4 12B | `refusal_cues/inference.py` `Runner` for the pilot letter protocol. The 470-record screen and capture use that runner together with `structured_messages` from the Colab `baseline.zip` | same capture module. The notebook's `load_judge` constructs `Runner` for Gemma |
 | Ministral 3 8B | same chat `Runner` plus the baseline bundle's structured JSON turns | same capture module |

@@ -1,8 +1,13 @@
 """Offline checks for the Qwen3Guard judge. Archive parity lives in units_full.py."""
+import base64
 import importlib.util
 import json
+import re
 import sys
+import types
 from pathlib import Path
+
+import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 SRC = HERE / "src"
@@ -104,12 +109,59 @@ def test_invalid_baseline_is_not_eligible():
 
 def test_notebook_code_cells_parse():
     notebook = json.loads((HERE / "qwen3guard_experiment.ipynb").read_text())
-    code = [cell for cell in notebook["cells"] if cell["cell_type"] == "code"]
+    code = ["".join(cell["source"]) for cell in notebook["cells"] if cell["cell_type"] == "code"]
     assert code
-    for index, cell in enumerate(code):
-        source = "".join(cell["source"])
+    for index, source in enumerate(code):
         if source.startswith("%%writefile"):
             source = source.split("\n", 1)[1]
         compile(source, f"cell{index}", "exec")
-    joined = "".join("".join(cell["source"]) for cell in notebook["cells"])
-    assert "refusal_cues.guard_judges" in joined
+    install = next(source for source in code if "guard_judges.py" in source and "b64decode" in source)
+    imported = next(source for source in code if "from refusal_cues.guard_judges import guard_messages" in source)
+    assert code.index(install) < code.index(imported)
+    encoded = re.search(r"base64\.b64decode\('([^']+)'\)", install).group(1)
+    repo_module = Path(__file__).resolve().parents[3] / "refusal_cues" / "guard_judges.py"
+    assert base64.b64decode(encoded) == repo_module.read_bytes()
+
+
+def test_resume_rejects_changed_records_or_budget(tmp_path):
+    judge, _, _ = modules()
+    records = [{"source_id": f"s{i}", "original_prompt": f"prompt {i}", "original_response": f"body {i}",
+                "mapped_unsafe": i == 0} for i in range(4)]
+    cue = {name: f"cue {name}" for name in ("N", "R", "R2", "paper_R1", "paper_R2", "paper_Rgreet")}
+
+    class Runner:
+        def __init__(self):
+            self.torch = types.SimpleNamespace(manual_seed=lambda seed: None)
+            self.meta = {"model_id": "fake", "revision": "0", "software": {}}
+
+        def run(self, turns, budget):
+            text = "Safety: Safe\nCategories: None\nRefusal: Yes"
+            result = {"raw_output": text, "parsed_text": text, "output_ids": [1, 2],
+                      "output_protocol": judge.OUTPUT_PROTOCOL, "budget_reached": False,
+                      **judge.parse_output(text), "decision_step": 2, "logprob_safe": -1.0,
+                      "logprob_unsafe": -2.0, "logprob_controversial": -3.0, "label_mass": 0.5,
+                      "unsafe_margin": -1.0, "margin_controversial_unsafe": 0.1,
+                      "margin_controversial_safe": -0.1, "input_tokens": 10,
+                      "input_ids_sha256": "x", "seconds": 0.0}
+            for view in judge.VIEWS:
+                result[f"verdict_{view}"] = judge.view_verdict(result["raw_label"], view)
+            return result
+
+    judge.run_behavioral(tmp_path, records, cue, Runner, "rt", max_new=3, log=lambda message: None)
+    folder = tmp_path / "behavioral" / "qwen3guard"
+    saved_manifest = (folder / "manifest.json").read_text()
+    saved_chunks = sorted(path.read_bytes() for path in (folder / "verdicts").glob("part-*.jsonl"))
+    manifest = json.loads(saved_manifest)
+    assert manifest["budget"] == judge.BUDGET
+    assert manifest["input_sha256"] == judge.input_digest(records)
+
+    changed = [dict(records[0], original_response="different body"), *records[1:]]
+    with pytest.raises(RuntimeError, match="input records"):
+        judge.run_behavioral(tmp_path, changed, cue, Runner, "rt", log=lambda message: None)
+    with pytest.raises(RuntimeError, match="decoding budget"):
+        judge.run_behavioral(tmp_path, records, cue, Runner, "rt", budget=1, log=lambda message: None)
+    assert (folder / "manifest.json").read_text() == saved_manifest
+    assert sorted(path.read_bytes() for path in (folder / "verdicts").glob("part-*.jsonl")) == saved_chunks
+
+    judge.run_behavioral(tmp_path, list(reversed(records)), cue, Runner, "rt2", log=lambda message: None)
+    assert len(judge.read_verdicts(folder)) == len(records) * len(judge.CONDITIONS) * judge.REPEATS
