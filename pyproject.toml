@@ -30,4 +30,4 @@ where = ["."]
 include = ["refusal_cues*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "experiments"]

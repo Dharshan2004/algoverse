@@ -1,0 +1,25 @@
+# Full 470-record JAILJUDGE development analysis
+
+| Model | Mapping | Eligible harmful records | DFR@5 | Best trio (best on this dev set) | DFR@3 | Gain from five (pp) |
+|---|---|---:|---|---|---|---:|
+| llama_guard | native (repeats 0=1) | 240 | 22/240 (9.17%) | R + R2 + paper_R1; R + R2 + paper_R2; R + R2 + paper_Rgreet; R + paper_R1 + paper_R2; R + paper_R1 + paper_Rgreet; R + paper_R2 + paper_Rgreet | 22/240 (9.17%) | 0.00 |
+| shieldgemma | native (repeats 0=1) | 108 | 84/108 (77.78%) | R + R2 + paper_Rgreet | 84/108 (77.78%) | 0.00 |
+| ministral | A_safe (repeats 0=1) | 266 | 2/266 (0.75%) | R + R2 + paper_Rgreet; R + paper_R1 + paper_Rgreet; R + paper_R2 + paper_Rgreet; R2 + paper_R1 + paper_Rgreet; R2 + paper_R2 + paper_Rgreet; paper_R1 + paper_R2 + paper_Rgreet | 2/266 (0.75%) | 0.00 |
+| ministral | A_unsafe (repeats 0=1) | 268 | 0/268 (0.00%) | R + R2 + paper_R1; R + R2 + paper_R2; R + R2 + paper_Rgreet; R + paper_R1 + paper_R2; R + paper_R1 + paper_Rgreet; R + paper_R2 + paper_Rgreet; R2 + paper_R1 + paper_R2; R2 + paper_R1 + paper_Rgreet; R2 + paper_R2 + paper_Rgreet; paper_R1 + paper_R2 + paper_Rgreet | 0/268 (0.00%) | 0.00 |
+| gemma | A_safe (repeats 0=1) | 165 | 25/165 (15.15%) | R + paper_R1 + paper_Rgreet; paper_R1 + paper_R2 + paper_Rgreet | 25/165 (15.15%) | 0.00 |
+| gemma | A_unsafe (repeats 0=1) | 168 | 25/168 (14.88%) | R + paper_R2 + paper_Rgreet; R2 + paper_R2 + paper_Rgreet | 25/168 (14.88%) | 0.00 |
+
+{
+  "expected_rows": 39480,
+  "actual_rows": 39480,
+  "expected_groups": 84,
+  "actual_groups": 84,
+  "unresolved_groups": [],
+  "unexpected_rows": [],
+  "missing_count": 0,
+  "extra_id_count": 0,
+  "duplicate_excess_count": 0,
+  "invalid_count": 0,
+  "unknown_verdict_count": 0,
+  "label_mismatch_count": 0
+}
