@@ -27,7 +27,7 @@ All generated files remain under ignored `data/preview/`. CSV reads preserve tex
 
 ## Run inference
 
-Upload `data/preview/candidate_inputs.jsonl` through [the clean pilot notebook](notebooks/pilot.ipynb), or use:
+Run the pilot from the checkout.
 
 ```sh
 python scripts/run_pilot.py --input data/preview/candidate_inputs.jsonl --out runs/new-pilot

@@ -15,8 +15,6 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from zipfile import ZipFile
 
-MODELS = ['llama_guard', 'shieldgemma', 'ministral', 'gemma']
-MAPPINGS = {m: ['native'] if m in MODELS[:2] else ['A_safe', 'A_unsafe'] for m in MODELS}
 CUES = ['R', 'R2', 'paper_R1', 'paper_R2', 'paper_Rgreet']
 CONDITIONS = ['B', 'N'] + CUES
 TRIOS = list(itertools.combinations(CUES, 3))
@@ -60,6 +58,7 @@ def main():
     archive_counts = {}
     schema = {}
     with ZipFile(args.results) as z:
+        MODELS = sorted({p.split("/")[1] for p in z.namelist() if p.startswith("baseline/") and p.endswith("/verdicts.jsonl")})
         cue_text = {'B': ''}
         for model in MODELS:
             for part in ['baseline', 'controls']:
@@ -82,6 +81,7 @@ def main():
                     assert (condition == 'B') == (part == 'baseline')
                     rows.append(dict(model=model, mapping=r['mapping'], repeat=r['repeat'], condition=condition,
                                      condition_text=cue_text[condition], source_id=r['source_id'], harmful=r['harmful'], verdict=r['verdict']))
+    MAPPINGS = {m: sorted({r["mapping"] for r in rows if r["model"] == m}) for m in MODELS}
     # Stable order, preserving every original row, even if a duplicate is present.
     rows.sort(key=lambda r: (MODELS.index(r['model']), r['mapping'], r['repeat'], CONDITIONS.index(r['condition']), r['source_id']))
     with (out/'all_results.jsonl').open('w') as f:
@@ -218,7 +218,7 @@ def main():
             d={x['condition']:x['rate'] for x in repeat_disagreement if x['model']==m and x['mapping']==mapping}
             lines.append(f'| {m} | {mapping} | '+' | '.join(fmt(d[c]) for c in CONDITIONS)+' |')
     lines+=['','## Chat-mapping disagreement (A_safe versus A_unsafe)','', '| Model | Repeat | '+' | '.join(CONDITIONS)+' |', '|---|---|'+'---|'*7]
-    for m in MODELS[2:]:
+    for m in [m for m in MODELS if "A_safe" in MAPPINGS[m]]:
         for rep in [0,1]:
             d={x['condition']:x['rate'] for x in mapping_disagreement if x['model']==m and x['repeat']==rep}
             lines.append(f'| {m} | {rep} | '+' | '.join(fmt(d[c]) for c in CONDITIONS)+' |')
@@ -226,12 +226,6 @@ def main():
     for entry in all_trios:
         for t in entry['trios']:
             lines.append(f"| {entry['model']} | {entry['mapping']} / {entry['repeat']} | {' + '.join(t['cues'])} | {fmt(t['rate'])} |")
-    lines+=['','## Plain-language takeaways','',
-        '- Refusal wording flips some baseline-UNSAFE harmful responses to SAFE for every model/mapping except Ministral A_unsafe. ShieldGemma has the largest conditional flip rate.',
-        '- Every mapping reaches its five-cue union with at least one three-cue subset on this dev set. This is dev-selected performance, not evidence that one fixed trio will match all five on new data.',
-        '- Ministral resists refusal-induced flips here but has many false positives on human-safe responses; low DFR alone is not overall judge quality.',
-        '- Neutral wording changes verdicts too. The refusal effect should be interpreted alongside baseline errors and the neutral control, rather than as a standalone accuracy score.',
-        '- The repeats agree exactly, but A/B mappings do not. Keep mappings separate; identical greedy repeats are not independent evidence of generalization.']
     lines+=['','## Cue definitions','']+[f"- {c}: {cue_text[c] if c!='B' else '(no prefix)'}" for c in CONDITIONS]
     lines+=['','## Reproduction and files','',
         '`python3 experiments/behavioral_refusal_screen/summaries/analyze_full_run.py`','',

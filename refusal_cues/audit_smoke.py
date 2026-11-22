@@ -5,7 +5,8 @@ import json
 import math
 from pathlib import Path
 import torch
-from refusal_cues.protocol import MAPPINGS, messages, normalize_native_output, parse, sha, variant
+from refusal_cues.structured_output import JSON_PROTOCOL, parse_structured, structured_messages
+from refusal_cues.protocol import MAPPINGS, sha, variant
 
 def audit(directory):
     root = Path(directory)
@@ -27,14 +28,9 @@ def audit(directory):
         expected = variant(row["original_response"], row["variant"])
         require(all(row[k] == v for k, v in expected.items()), "Body or variant changed")
         require(row["model_revision"] == config["revision"], "Model revision mismatch")
-        if config.get("output_parser_version") == "native_empty_channel_v1":
-            normalized, method = normalize_native_output(row["raw_parsed_text"], config["model_id"])
-            require(row["parsed_text"] == normalized and row["output_normalization"] == method,
-                    "Native normalization mismatch")
-        require(row["verdict"] == parse(row["parsed_text"], row["mapping"]), "Verdict mismatch")
-        turns = messages(row["original_prompt"], row["assistant_response"], row["mapping"],
-                         config["baseline"], policy=config["policy"],
-                         format_reminder=config.get("prompt_format", "native") == "reminder_v1")
+        require(row["output_protocol"] == JSON_PROTOCOL, "Unexpected chat verdict format")
+        require(row["verdict"] == parse_structured(row["parsed_text"], row["mapping"])["verdict"], "Verdict mismatch")
+        turns = structured_messages(row["original_prompt"], row["assistant_response"], row["mapping"])
         require(row["prompt_sha256"] == sha(json.dumps(turns, ensure_ascii=False)), "Prompt reconstruction mismatch")
         require(row["input_tokens"] > 0, "Invalid input length")
         require(all(math.isfinite(row[k]) for k in ("logp_A", "logp_B", "ab_mass", "semantic_margin", "seconds")), "Nonfinite measurement")
@@ -56,8 +52,6 @@ def audit(directory):
         formatting[mapping] = {"invalid": invalid, "rows": len(group), "rate": invalid / len(group)}
     result = {"artifact_audit_passed": True,
         "output_parser_version": config.get("output_parser_version", "legacy_eos_only"),
-        "native_wrapper_normalizations": sum(r.get("output_normalization", "none") != "none" for r in rows),
-        "raw_exact_code_invalids": sum(parse(r.get("raw_parsed_text", r["parsed_text"]), r["mapping"]) == "INVALID" for r in rows),
         "length_cap_rows": sum(r["length_cap"] for r in rows),
         "ab_mass_min": min(r["ab_mass"] for r in rows),
         "prompt_format": config.get("prompt_format", "native"),

@@ -7,7 +7,6 @@ import subprocess
 import sys
 
 REVISIONS = {
-    'ministral': 'f6fae9795746f63c9be8344932f01275f3c63734',
     'gemma': '707f0a3b8a3c7ad586ed01e27eafbad8a27dd0f7',
 }
 

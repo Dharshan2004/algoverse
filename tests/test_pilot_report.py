@@ -8,7 +8,9 @@ import unittest
 
 from refusal_cues.pilot import REVISIONS
 from refusal_cues.pilot_report import adapt_metrics, audit, summarize
-from refusal_cues.protocol import MODELS, POLICY, messages, sha, variant
+from refusal_cues.protocol import MODELS, POLICY, sha, variant
+
+from refusal_cues.structured_output import JSON_PROTOCOL, structured_messages
 
 class PilotTests(unittest.TestCase):
     def rows(self):
@@ -22,7 +24,7 @@ class PilotTests(unittest.TestCase):
                     if unsafe and v=='R2' and m=='A_safe':verdict='INVALID'
                     code=('bad' if verdict=='INVALID' else ('A' if (verdict=='SAFE')==(m=='A_safe') else 'B'))
                     result.append({'source_id':sid,'cluster_id':sid,'mapped_unsafe':unsafe,
-                        'variant':v,'mapping':m,'verdict':verdict,'parsed_text':code,
+                        'variant':v,'mapping':m,'verdict':verdict,'parsed_text':json.dumps({'verdict': code}), 'output_protocol':JSON_PROTOCOL,
                         'logp_A':-1.,'logp_B':-2.})
         return result
 
@@ -37,7 +39,7 @@ class PilotTests(unittest.TestCase):
     def test_team_adapter_uses_normalized_text(self):
         rows=self.rows();rows[0]['raw_output']='native wrapper'
         adapted=adapt_metrics(rows)
-        self.assertEqual(adapted[0]['raw_output'],rows[0]['parsed_text'])
+        self.assertEqual(adapted[0]['raw_output'],json.loads(rows[0]['parsed_text'])['verdict'])
         self.assertEqual([x['mapping'] for x in adapted[:2]],[1,2])
         self.assertEqual(adapted[2]['condition'],'R+B')
 
@@ -46,7 +48,7 @@ class PilotTests(unittest.TestCase):
             'original_response':'Saved response '+s,'mapped_unsafe':u,
             'study_partition':'development','label_provenance':'human'} for s,u in [('unsafe',True),('safe',False)]]
         inp=root/'input.jsonl';inp.write_text(''.join(json.dumps(r)+'\n' for r in source))
-        config={'compute_dtype':'bfloat16','baseline':'native','prompt_format':'native',
+        config={'compute_dtype':'bfloat16','baseline':'native','output_protocol':JSON_PROTOCOL,
             'input_file_sha256':sha(inp.read_text()),'revision':REVISIONS['gemma'],'model_id':MODELS['gemma'], 'policy':POLICY}
         (root/'run_config.json').write_text(json.dumps(config))
         (root/'identity_check.json').write_text(json.dumps({'passed':True,'calls':2}))
@@ -54,9 +56,9 @@ class PilotTests(unittest.TestCase):
         for i,r in enumerate(rows):
             r.update(originals[r['source_id']]);r.update(variant(r['original_response'],r['variant']))
             r.update(status='ok',run_index=i,model_revision=REVISIONS['gemma'],raw_parsed_text=r['parsed_text'],
-                output_normalization='none',input_tokens=100,seconds=1.,
+                output_normalization=JSON_PROTOCOL,input_tokens=100,seconds=1.,
                 ab_mass=math.exp(-1)+math.exp(-2),semantic_margin=1. if r['mapping']=='A_unsafe' else -1.,states_file=f'states_{i:05d}.pt')
-            r['prompt_sha256']=sha(json.dumps(messages(r['original_prompt'],r['assistant_response'],r['mapping']),ensure_ascii=False))
+            r['prompt_sha256']=sha(json.dumps(structured_messages(r['original_prompt'],r['assistant_response'],r['mapping']),ensure_ascii=False))
             (root/r['states_file']).write_bytes(b'placeholder, tensor contents not audited')
         return inp,rows
 

@@ -4,8 +4,8 @@ transformers
 accelerate
 bitsandbytes
 huggingface-hub
-mistral-common
 sentencepiece
+pydantic>=2,<3
 numpy
 
 # Analysis-only workflows also install requirements-analysis.txt (or pip install -e ".[analysis]").

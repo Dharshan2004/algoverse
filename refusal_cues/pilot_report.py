@@ -6,8 +6,9 @@ import json
 import math
 from pathlib import Path
 
+from refusal_cues.structured_output import JSON_PROTOCOL, structured_messages, parse_structured
 from refusal_cues.pilot import REVISIONS
-from refusal_cues.protocol import MODELS, MAPPINGS, messages, normalize_native_output, parse, sha, validate_records, variant
+from refusal_cues.protocol import MODELS, MAPPINGS, sha, validate_records, variant
 
 VARIANTS = ('B','R','N','R2')
 
@@ -21,7 +22,7 @@ def adapt_metrics(rows):
     return [{'family_id': r['source_id'], 'cluster_id': r['cluster_id'],
         'source_label': 'unsafe' if r['mapped_unsafe'] else 'safe',
         'condition': names[r['variant']], 'mapping': 1 if r['mapping']=='A_safe' else 2,
-        'raw_output': r['parsed_text'], 'logp_A': r['logp_A'], 'logp_B': r['logp_B']}
+        'raw_output': (parse_structured(r['parsed_text'], r['mapping'])['answer_code'] or 'INVALID'), 'logp_A': r['logp_A'], 'logp_B': r['logp_B']}
         for r in rows]
 
 def audit(root, inputs, check_states=False, partition="development"):
@@ -33,7 +34,7 @@ def audit(root, inputs, check_states=False, partition="development"):
     expected_revision = {MODELS[name]: revision for name, revision in REVISIONS.items()}[config['model_id']]
     require(config.get('revision') == expected_revision, 'Unapproved pilot checkpoint revision')
     require(config['compute_dtype']=='bfloat16', 'Pilot must use BF16')
-    require(config['baseline']=='native' and config.get('prompt_format')=='native', 'Unexpected prompt')
+    require(config['baseline']=='native' and config.get('output_protocol') == JSON_PROTOCOL, 'Unexpected prompt')
     require(config['input_file_sha256']==sha(Path(inputs).read_text()), 'Input file hash mismatch')
     original = validate_records([json.loads(x) for x in Path(inputs).read_text().splitlines() if x.strip()])
     require(partition in ('development','synthetic') and all(r['study_partition']==partition for r in original), 'Unexpected study partition')
@@ -54,10 +55,9 @@ def audit(root, inputs, check_states=False, partition="development"):
         require(all(r.get(k)==v for k,v in source[r['source_id']].items()), 'Source record changed')
         require(all(r.get(k)==v for k,v in variant(r['original_response'],r['variant']).items()), 'Variant/body changed')
         require(r['model_revision']==config['revision'], 'Revision mismatch')
-        normalized,method=normalize_native_output(r['raw_parsed_text'],config['model_id'])
-        require((r['parsed_text'],r['output_normalization'])==(normalized,method), 'Normalization mismatch')
-        require(r['verdict']==parse(normalized,r['mapping']), 'Verdict mismatch')
-        prompt=messages(r['original_prompt'],r['assistant_response'],r['mapping'],config['baseline'],policy=config['policy'])
+        require(r['output_protocol'] == JSON_PROTOCOL and r['raw_parsed_text'] == r['parsed_text'], 'JSON evidence mismatch')
+        require(r['verdict'] == parse_structured(r['parsed_text'], r['mapping'])['verdict'], 'Verdict mismatch')
+        prompt = structured_messages(r['original_prompt'], r['assistant_response'], r['mapping'])
         require(r['prompt_sha256']==sha(json.dumps(prompt,ensure_ascii=False)), 'Prompt mismatch')
         require(r['input_tokens'] > 0, 'Invalid input length')
         require(all(math.isfinite(r[k]) for k in ['logp_A','logp_B','ab_mass','semantic_margin','seconds']), 'Nonfinite score')

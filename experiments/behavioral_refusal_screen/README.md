@@ -1,42 +1,26 @@
 # Behavioral refusal screen
 
-470-record development screen of how refusal wording changes safety verdicts. Four judges, seven response conditions, two greedy repeats.
+Open `behavioral_refusal_screen.ipynb` in Colab on an L4 or A100. Enable the Hugging Face token for gated checkpoints. Place the adapted `jailjudge_screen.jsonl` in `MyDrive/algoverse-jailjudge-inputs/` and run all cells. The notebook checks the dataset digest and saves completed records to Drive. Rerunning resumes those records. The combined CSV and paired metrics appear under `MyDrive/algoverse-jailjudge-outputs/repo-screen/`.
 
-| Judge | Checkpoint | Labels |
-|---|---|---|
-| Llama Guard 3 1B | `meta-llama/Llama-Guard-3-1B` | native `safe` / `unsafe`, via `refusal_cues.guard_judges.GuardRunner` |
-| ShieldGemma 2B | `google/shieldgemma-2b` | Yes/No score, via `refusal_cues.guard_judges.GuardRunner` |
-| Ministral 3 8B | `mistralai/Ministral-3-8B-Instruct-2512-BF16` | `A_safe` and `A_unsafe` |
-| Gemma 4 12B | `google/gemma-4-12B-it` | `A_safe` and `A_unsafe` |
+The full run covers B (original), N (neutral) and five refusal cues, with two greedy repetitions. Gemma uses the decode-only JSON verdict under both label mappings, with the same prompt as unconstrained decoding and no answer prefill. Llama Guard and ShieldGemma use their native decisions. Qwen3Guard-Gen-8B emits one native label per generation, scored separately with Controversial counted as unsafe and as safe. Keep repetitions and mappings separate.
 
-Conditions: `B` (original body), `N` (neutral prefix), `R`, `R2`, `paper_R1`, `paper_R2`, `paper_Rgreet`. The cue is prepended as `cue + "\n\n" + body`. Guards use one native mapping. Chat judges use both letter mappings. That is 39,480 judgments (270 human-harmful and 200 human-safe records).
-
-## Run
-
-`behavioral_refusal_screen.ipynb` is the resume notebook (`RESUME_MISSING_ONLY = True`). On an L4 or A100 Colab runtime with an `HF_TOKEN` secret, run cells 2, 3, 4, 6, 7, 8 in order.
-
-Drive inputs live in `MyDrive/algoverse-jailjudge-inputs/`: `baseline.zip`, and for a resume also `jailjudge-baseline-results.zip` and `jailjudge-control-results.zip`. Outputs go to `MyDrive/algoverse-jailjudge-outputs/<timestamp>-resume/`. Keep `START_NEW_RUN` false to continue the same folder. The notebook refreshes `merged-results.zip` every 60 seconds.
-
-`upgrade_notebook.py` rebuilds that notebook from local predecessor files `refusal_screen.ipynb` and `refusal_screen_fixed.ipynb` (those predecessors are not in this snapshot). It writes `behavioral_refusal_screen_full.ipynb` and `behavioral_refusal_screen.ipynb`.
-
-The analysis definition is `ANALYSIS_SPEC.md`. Recompute it from local archives with:
+From the checkout, the two commands below score the original and prefixed responses for one checkpoint. Repeat for `llama_guard`, `shieldgemma` and `qwen3guard`.
 
 ```sh
-python3 experiments/behavioral_refusal_screen/summaries/analyze_full_run.py \
-  --results experiments/behavioral_refusal_screen/summaries/merged-results.zip \
-  --input experiments/behavioral_refusal_screen/inputs/baseline.zip \
-  --output-dir experiments/behavioral_refusal_screen/summaries
+python -m scripts.run_jailjudge_baseline gemma "$DATA" runs/baseline
+python -m scripts.run_jailjudge_baseline gemma "$DATA" runs/controls --controls
 ```
 
-## What is in git
+## Data preparation and five-cue screen
 
-`summaries/` holds the audited write-up and the small tables: `analysis.md`, `analysis.json`, `analysis-run.log`, `all_results_summary.csv` (84 groups), and `audit/`. The raw verdict table and zip archives stay local:
+`configs/refusal_screen.json` reconstructs the five-cue configuration. The original dataset revision pins are unavailable. Pass a known dataset commit via `--revision` when downloading. The preparer records the resolved revision and file hashes. The full JailJudge runner independently verifies the expected adapted dataset digest.
 
-| Local file | Approx. size | Why it is omitted |
-|---|---:|---|
-| `all_results.csv` | 5.5 MB | 39,480 verdict rows |
-| `all_results.jsonl` | 10 MB | same rows as JSONL |
-| `jailjudge-full-470-results.zip` | 4 MB compressed | raw verdicts, logs, and the screen JSONL |
-| `merged-results.zip` | 0.6 MB compressed | per-model verdict JSONL used to rebuild the table |
+```sh
+python -m scripts.prepare_refusal_screen --dataset jailjudge --revision "$DATASET_REVISION" --out "$DATA"
+python -m scripts.run_refusal_screen --model gemma --dataset jailjudge --input "$DATA" --out runs/screen
+python -m scripts.report_refusal_screen runs/screen
+```
 
-`refusal_cues/guard_judges.py` is the in-repo Llama Guard and ShieldGemma runner (`GuardRunner`, `guard_messages`, `parse_guard`). The Colab baseline bundle still supplies the chat-judge `Runner` and `structured_messages`.
+Use `--limit 20 --dry-run` on the screen command for a CPU plan. This screen uses B and the five refusal cues. The full notebook also includes N. Historical summaries in this folder retain their original cohort.
+
+If Drive already contains the original input archive, the notebook can read just the dataset member from it. Code always comes from the checkout. Set `ALGOVERSE_REF` before the first setup cell to clone a PR branch.
