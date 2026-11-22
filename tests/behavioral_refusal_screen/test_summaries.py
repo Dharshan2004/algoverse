@@ -3,12 +3,14 @@ import csv
 import json
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parents[2] / "experiments" / "behavioral_refusal_screen"
+ROOT = Path(__file__).resolve().parents[2]
+EXPERIMENT = Path("experiments/behavioral_refusal_screen")
+HERE = ROOT / EXPERIMENT
 SUMMARIES = HERE / "summaries"
 
 
 def test_summary_table_covers_every_group():
-    with (SUMMARIES / "all_results_summary.csv").open(newline="") as handle:
+    with (ROOT / "archive" / EXPERIMENT / "summaries" / "all_results_summary.csv").open(newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert len(rows) == 84
     assert len({row["model"] for row in rows}) == 4
