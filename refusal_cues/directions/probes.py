@@ -416,6 +416,150 @@ def run_condition(runner, records, condition, out_path, layer=None, rG=None, alp
 
 
 # ---------------------------------------------------------------------------
+# rG repair: broader removal (approved after the original rG validation failed)
+# ---------------------------------------------------------------------------
+# The original edit acted once, at one block, on the final prompt token. The repair keeps the
+# same frozen rG and removes it more broadly. Variants are declared before any repair answer:
+#   A  rG's layer only, every token position, in the prompt pass and at every generated token
+#   B  rG's layer through the last block, every token position, prompt and generated tokens
+#   C  every block, every token position, prompt and generated tokens
+# A matched random control at the same scope moves each state along a random direction u
+# (orthogonal to rG) exactly as far as removing rG would move it: h' = h - (h.r) u.
+
+REPAIR_VARIANTS = ("A", "B", "C")          # narrowest first, which is also the tie-break order
+
+
+def repair_blocks(variant, layer, n_layers):
+    """Decoder blocks edited by each declared repair variant."""
+    if variant == "A":
+        return [layer]
+    if variant == "B":
+        return list(range(layer, n_layers))
+    if variant == "C":
+        return list(range(n_layers))
+    raise ValueError(f"Unknown repair variant {variant!r}")
+
+
+class BroadRemoval:
+    """Removes one direction from the output of several decoder blocks at every token position,
+    in the prompt pass and at every generated token, for as long as the `with` block lasts.
+
+    u=None:  h' = h - (h.r) r   (removal: the r coordinate becomes zero)
+    u given: h' = h - (h.r) u   (matched random control: same size of move, along u instead)
+
+    Enter it before runner.run(..., edit=None). Its hooks are registered first, so they run before
+    the runner's own capture hooks, and the runner's saved states are post-edit. The math runs
+    in float32 and is cast back to the model's dtype. Hooks are always removed on exit.
+    """
+
+    def __init__(self, layers, blocks, r, u=None):
+        self.layers, self.blocks = layers, sorted(set(int(b) for b in blocks))
+        if not self.blocks or self.blocks[0] < 0 or self.blocks[-1] >= len(layers):
+            raise ValueError(f"Blocks {blocks} are outside 0..{len(layers) - 1}")
+        self.r = self._unit(r, "r")
+        self.u = None if u is None else self._unit(u, "u")
+        if self.u is not None and abs(float(self.u @ self.r)) > 1e-3:
+            raise ValueError("The random direction must be orthogonal to r")
+        self.handles = []
+        self.stats = {"forward_calls": 0, "positions_edited": 0}
+        # Per device: (r, target, running totals). Totals stay on the GPU so the hooks never force a
+        # sync at every block and token: [sum |h.r|, max |h.r| after the edit, nonfinite values]
+        self._cache = {}
+
+    @staticmethod
+    def _unit(v, name):
+        v = torch.as_tensor(v, dtype=torch.float32).flatten().cpu()
+        if not torch.isfinite(v).all() or abs(float(v.norm()) - 1) > 1e-4:
+            raise ValueError(f"{name} must be finite and unit length")
+        return v
+
+    def _hook(self, module, args, output):
+        x = output[0] if isinstance(output, tuple) else output
+        h = x.float()
+        if h.device not in self._cache:
+            r = self.r.to(h.device)
+            self._cache[h.device] = (r, r if self.u is None else self.u.to(h.device),
+                                     torch.zeros(3, device=h.device))
+        r, target, acc = self._cache[h.device]
+        coord = h @ r                                     # one value per token position
+        y = (h - coord.unsqueeze(-1) * target).to(x.dtype)
+        acc[0] += coord.abs().sum()
+        acc[1] = torch.maximum(acc[1], (y.float() @ r).abs().max())
+        acc[2] += (~torch.isfinite(y)).sum()
+        self.stats["forward_calls"] += 1
+        self.stats["positions_edited"] += coord.numel()
+        return (y,) + tuple(output[1:]) if isinstance(output, tuple) else y
+
+    def __enter__(self):
+        try:
+            for b in self.blocks:
+                self.handles.append(self.layers[b].register_forward_hook(self._hook))
+        except Exception:
+            self.__exit__()
+            raise
+        return self
+
+    def __exit__(self, *exc):
+        for handle in self.handles:
+            handle.remove()
+        self.handles = []
+        return False
+
+    def summary(self):
+        s = self.stats
+        total, worst, nonfinite = 0.0, 0.0, 0
+        for _, _, acc in self._cache.values():
+            a = acc.tolist()
+            total, worst, nonfinite = total + a[0], max(worst, a[1]), nonfinite + int(a[2])
+        return {"broad_mode": "remove" if self.u is None else "matched_random",
+                "broad_blocks": [self.blocks[0], self.blocks[-1]], "broad_n_blocks": len(self.blocks),
+                "broad_direction_sha256": direction_hash(self.r),
+                "broad_random_sha256": None if self.u is None else direction_hash(self.u),
+                "broad_forward_calls": s["forward_calls"], "broad_positions_edited": s["positions_edited"],
+                "broad_mean_abs_coordinate": total / max(s["positions_edited"], 1),
+                "broad_max_abs_coordinate_after": worst, "broad_nonfinite_values": nonfinite}
+
+
+def degenerate(text, min_words=40, min_distinct=0.25):
+    """Declared coherence flag: empty, or at least 40 words with under 25% distinct words
+    (a repetition loop). Used to keep a broken-model effect from counting as compliance."""
+    words = re.findall(r"\w+", text.lower())
+    if not words:
+        return True
+    return len(words) >= min_words and len(set(words)) / len(words) < min_distinct
+
+
+def run_broad_condition(runner, records, condition, out_path, blocks, r, u=None, layer=None,
+                        variant=None, system=SYSTEM, max_new_tokens=MAX_ANSWER_TOKENS):
+    """Like run_condition, but each answer is generated inside BroadRemoval. Resumable: records
+    already answered under the same condition are skipped. layer records rG's own layer."""
+    out_path = Path(out_path)
+    done = {x["prompt_id"] for x in load_answers(out_path) if x["condition"] == condition}
+    with out_path.open("a", encoding="utf-8") as f:
+        for rec in records:
+            if rec["prompt_id"] in done:
+                continue
+            edit = BroadRemoval(runner.layers, blocks, r, u)
+            try:
+                with edit:
+                    row, _ = answer(runner, rec, edit=None, condition=condition,
+                                    system=system, max_new_tokens=max_new_tokens)
+                row.update(edit.summary())
+                if row["broad_nonfinite_values"]:
+                    raise RuntimeError(f"Nonfinite activations after broad removal on {rec['prompt_id']}")
+                row["degenerate"] = degenerate(row["answer_text"])
+            except ValueError as err:
+                if "exceeds" not in str(err):
+                    raise
+                row = {k: rec[k] for k in RECORD_KEYS if k in rec}
+                row.update(status="input_too_long", condition=condition, error=str(err))
+            row.update(layer=layer, repair_variant=variant)
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.flush()
+    return out_path
+
+
+# ---------------------------------------------------------------------------
 # Saving
 # ---------------------------------------------------------------------------
 
@@ -645,6 +789,74 @@ def self_test():
 
     # Hash matches the runner's convention
     assert direction_hash(r) == sha(json.dumps(r.cpu().tolist()))
+
+    # Repair: broad removal at several blocks, every position, every forward call
+    assert repair_blocks("A", 26, 48) == [26] and repair_blocks("B", 26, 48) == list(range(26, 48))
+    assert repair_blocks("C", 26, 48) == list(range(48))
+    fake = _FakeRunner()
+    turns = make_turns("please answer question one now")
+    _, native = fake.run(turns)
+    rb = torch.nn.functional.normalize(torch.randn(8), dim=0)
+    ub = random_directions(rb)[SEEDS[0]]
+    with BroadRemoval(fake.layers, repair_blocks("B", 3, len(fake.layers)), rb) as br:
+        _, broad = fake.run(turns)
+    assert torch.allclose(broad[1], native[1])                     # block 1 is before the edit
+    assert abs(float(broad[3] @ rb)) < 1e-4 and abs(float(broad[5] @ rb)) < 1e-4
+    n_tokens = fake.encode(turns)["input_ids"].shape[1]
+    assert br.stats["forward_calls"] == 5 and br.stats["positions_edited"] == 5 * n_tokens
+    summ = br.summary()
+    assert summ["broad_max_abs_coordinate_after"] < 1e-4 and summ["broad_nonfinite_values"] == 0
+    assert summ["broad_mean_abs_coordinate"] > 0 and not fake.layers[3]._forward_hooks
+    _, again = fake.run(turns)                                      # hooks are gone after exit
+    assert torch.allclose(again[5], native[5])
+
+    # Matched random at one block: r coordinate kept, moved exactly as far as removal would move it
+    x = torch.randn(1, 6, 8)
+    plain = fake.layers[3](x)
+    with BroadRemoval(fake.layers, [3], rb):
+        removed = fake.layers[3](x)
+    with BroadRemoval(fake.layers, [3], rb, ub):
+        moved = fake.layers[3](x)
+    assert torch.allclose(moved @ rb, plain @ rb, atol=1e-5)
+    assert torch.allclose((moved - plain).norm(dim=-1), (removed - plain).norm(dim=-1), atol=1e-5)
+    assert torch.allclose(removed @ rb, torch.zeros(1, 6), atol=1e-5)
+
+    # Tuple outputs and repeated calls (each generated token is one more forward call)
+    class _TupleBlock(torch.nn.Module):
+        def forward(self, z):
+            return (z * 2.0, "cache")
+    tb = torch.nn.ModuleList([_TupleBlock()])
+    with BroadRemoval(tb, [0], rb) as br:
+        out1, out2 = tb[0](torch.randn(1, 4, 8)), tb[0](torch.randn(1, 1, 8))
+    assert out1[1] == "cache" and abs(float((out1[0] @ rb).abs().max())) < 1e-4
+    assert br.stats["forward_calls"] == 2 and br.stats["positions_edited"] == 5
+    for bad in ((tb, [5], rb, None), (tb, [0], rb * 2, None), (tb, [0], rb, rb)):
+        try:
+            BroadRemoval(*bad)
+            raise AssertionError(f"bad BroadRemoval arguments were not caught: {bad[1]}")
+        except ValueError:
+            pass
+
+    # Coherence flag
+    assert degenerate("") and degenerate("the the the " * 20) and not degenerate("Here is a short helpful answer.")
+
+    # Logging and resume for broad conditions
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "repair.jsonl"
+        blocks = repair_blocks("B", 3, len(fake.layers))
+        run_broad_condition(fake, recs_a, "repair_remove:B", out, blocks, rb, layer=3, variant="B")
+        run_broad_condition(fake, recs_a, f"repair_random:B:{SEEDS[0]}", out, blocks, rb, ub,
+                            layer=3, variant="B")
+        run_broad_condition(fake, recs_a, "repair_remove:B", out, blocks, rb, layer=3, variant="B")
+        rows = load_answers(out)
+        assert len(rows) == 6 and all(x["status"] == "ok" and x["repair_variant"] == "B" for x in rows)
+        rem = [x for x in rows if x["condition"] == "repair_remove:B"]
+        ran = [x for x in rows if x["condition"].startswith("repair_random")]
+        assert all(x["broad_mode"] == "remove" and x["broad_n_blocks"] == 5 for x in rem)
+        assert all(x["broad_mode"] == "matched_random" and x["broad_random_sha256"] for x in ran)
+        assert all(x["runner_edit_log"] == {} and "edit_mode" not in x for x in rows)
+        run_broad_condition(fake, long_rec, "repair_remove:B", out, blocks, rb, layer=3, variant="B")
+        assert load_answers(out)[-1]["status"] == "input_too_long"
     print("probes.self_test: all checks passed")
 
 
