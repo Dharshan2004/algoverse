@@ -3,14 +3,18 @@ import argparse
 import importlib.metadata
 import json
 import math
-import re
 import time
 from pathlib import Path
+from refusal_cues.structured_output import JSON_PROTOCOL, JsonVerdictConstraint, JudgeOutput, parse_structured, structured_messages
 from refusal_cues.paths import DEFAULT_EXAMPLES
-from refusal_cues.protocol import MODELS, MAPPINGS, POLICY, depths, messages, normalize_native_output, parse, sha, validate_records, variant
+from refusal_cues.protocol import (
+    MODELS, MAPPINGS, POLICY, depths, sha, validate_records, variant,
+)
 
 class Runner:
     def __init__(self, model_id, revision="main", compute_dtype="bfloat16"):
+        if model_id not in MODELS.values():
+            raise ValueError("Unsupported chat judge")
         import torch
         import transformers as tr
         from huggingface_hub import model_info
@@ -26,16 +30,13 @@ class Runner:
         self.revision = model_info(model_id, revision=revision).sha
         torch.manual_seed(20261004)
         config = tr.AutoConfig.from_pretrained(model_id, revision=self.revision, trust_remote_code=False)
-        self.model_max_position_embeddings = getattr(config, "max_position_embeddings", None)
+        self.model_max_position_embeddings = getattr(getattr(config, "text_config", config), "max_position_embeddings", None)
         arch = config.architectures[0]
         cls = getattr(tr, arch, None)
         if cls is None:
             raise RuntimeError(f"Installed transformers lacks native architecture {arch}; update then rerun smoke checks")
-        self.processor = (tr.MistralCommonBackend.from_pretrained(model_id, revision=self.revision)
-                          if model_id.startswith("mistralai/Ministral") else
-                          tr.AutoProcessor.from_pretrained(model_id, revision=self.revision, trust_remote_code=False))
-        self.tokenizer = (self.processor if model_id.startswith("mistralai/Ministral")
-                          else self.processor.tokenizer)
+        self.processor = tr.AutoProcessor.from_pretrained(model_id, revision=self.revision, trust_remote_code=False)
+        self.tokenizer = self.processor.tokenizer
         print(f"Loading {arch} at {self.revision} with NF4/{compute_dtype}", flush=True)
         self.model = cls.from_pretrained(model_id, revision=self.revision, trust_remote_code=False,
             device_map={"": 0}, dtype=dtype,
@@ -67,11 +68,10 @@ class Runner:
             "quantization": "NF4 double quantization", "compute_dtype": compute_dtype,
             "protocol_precision_match": compute_dtype == "bfloat16",
             "run_purpose": "protocol_smoke" if compute_dtype == "bfloat16" else "T4_FP16_compatibility_only",
-            "thinking": False, "output_parser_version": "native_empty_channel_v1",
+            "thinking": False, "output_parser_version": JSON_PROTOCOL,
             "gpu": torch.cuda.get_device_name(0),
             "chat_template_sha256": sha(str(template)) if template else None,
             "template_backend": type(self.processor).__name__,
-            "mistral_common_version": importlib.metadata.version("mistral-common") if model_id.startswith("mistralai/") else None,
             "software": {p: importlib.metadata.version(p) for p in
                          ("torch", "transformers", "accelerate", "bitsandbytes", "huggingface-hub")}}
 
@@ -87,25 +87,23 @@ class Runner:
             )
         return {k: v.to("cuda:0") if hasattr(v, "to") else v for k, v in data.items()}
 
-    def run(self, turns, max_new_tokens=4, edit=None, output_protocol="native_v1"):
+    def run(self, turns, max_new_tokens=256, edit=None, output_protocol=JSON_PROTOCOL):
 
         """edit: {layer, direction, mode: replace/remove/add/identity, donor/amount}.
 
         Direction estimation/validation belongs to the interpretability workstream.
         The optional operator acts once at the final prefill token, never during decoding.
         """
-        if output_protocol not in ("native_v1", "ab_constrained_v1"):
-            raise ValueError("Unknown output protocol")
-        constrained = output_protocol == "ab_constrained_v1"
-        generation_kwargs = {}
-        if constrained:
-            from refusal_cues.ab_constraint import ABOnlyLogitsProcessor
-            from transformers import LogitsProcessorList
-            max_new_tokens = 1
-            generation_kwargs["logits_processor"] = LogitsProcessorList([ABOnlyLogitsProcessor(self.codes)])
+        if output_protocol != JSON_PROTOCOL:
+            raise ValueError("Unsupported chat verdict format")
         t = self.torch
         inputs = self.encode(turns)
         length = inputs["input_ids"].shape[-1]
+        constraint = JsonVerdictConstraint(self.tokenizer, int(length), self.model.generation_config.eos_token_id)
+        if self.model_max_position_embeddings and length + constraint.required_budget > self.model_max_position_embeddings:
+            raise ValueError("Complete input and JSON verdict exceed model context")
+        if max_new_tokens < constraint.required_budget:
+            raise ValueError("Output budget cannot fit the complete JSON verdict and EOS")
         states, handles, fired = {}, [], set()
         edit_log = {}
         selected = set(self.depths)
@@ -161,7 +159,7 @@ class Runner:
             with t.inference_mode():
                 out = self.model.generate(**inputs, do_sample=False, num_beams=1,
                     max_new_tokens=max_new_tokens, use_cache=True,
-                    return_dict_in_generate=True, output_logits=True, **generation_kwargs)
+                    return_dict_in_generate=True, output_logits=True, prefix_allowed_tokens_fn=constraint)
             t.cuda.synchronize()
             seconds = time.perf_counter()-start
         finally:
@@ -172,8 +170,7 @@ class Runner:
         new_ids = out.sequences[0, length:].tolist()
         raw = self.tokenizer.decode(new_ids, skip_special_tokens=False)
         # Strip only known end-of-turn/EOS/PAD ids at the outside; do not erase
-        # arbitrary special tokens or reasoning. A separate narrow normalizer below
-        # recognizes Gemma's empty channel wrapper before strict A/B parsing.
+        # arbitrary special tokens inside the JSON verdict.
         eos = self.model.generation_config.eos_token_id
         stop_ids = set(eos if isinstance(eos, list) else [eos])
         stop_ids.add(self.model.generation_config.pad_token_id)
@@ -181,23 +178,22 @@ class Runner:
         while cleaned_ids and cleaned_ids[-1] in stop_ids:
             cleaned_ids.pop()
         cleaned = self.tokenizer.decode(cleaned_ids, skip_special_tokens=False)
-        parsed_text, normalization = normalize_native_output(cleaned, self.model_id)
-        logp = out.logits[0][0].float().log_softmax(-1)
+        JudgeOutput.model_validate_json(cleaned)
+        logp = out.logits[constraint.branch_index][0].float().log_softmax(-1)
         if not t.isfinite(logp).all():
             raise RuntimeError("Nonfinite next-token scores")
-        scores = {c: float(logp[i]) for c, i in self.codes.items()}
-        if constrained and (len(new_ids) != 1 or new_ids[0] not in self.codes.values()):
-            raise RuntimeError("Constrained generation did not produce exactly one answer code")
+        scores = {code: float(logp[path[constraint.branch_index]])
+                  for code, path in zip("AB", constraint.paths)}
         return {"output_protocol": output_protocol,
             "generation_budget": max_new_tokens, "budget_reached": len(new_ids) == max_new_tokens,
-            "stop_reason": "fixed_code_complete" if constrained else ("end_token" if new_ids and new_ids[-1] in stop_ids else "budget"),
+            "stop_reason": ("end_token" if new_ids and new_ids[-1] in stop_ids else "budget"),
             "raw_output": raw, "raw_parsed_text": cleaned,
-            "parsed_text": parsed_text, "output_normalization": normalization, "output_ids": new_ids,
+            "parsed_text": cleaned, "output_normalization": JSON_PROTOCOL, "output_ids": new_ids,
             "input_tokens": length, "input_ids_sha256": sha(json.dumps(inputs["input_ids"].tolist())),
             "logp_A": scores["A"], "logp_B": scores["B"],
             "ab_mass": sum(math.exp(v) for v in scores.values()),
             "end_of_answer": bool(new_ids and new_ids[-1] in stop_ids),
-            "length_cap": not constrained and len(new_ids) == max_new_tokens and new_ids[-1] not in stop_ids,
+            "length_cap": len(new_ids) == max_new_tokens and new_ids[-1] not in stop_ids,
             "seconds": seconds, "peak_gpu_bytes": t.cuda.max_memory_allocated(),
             "edit": edit_log, "status": "ok"}, states
 
@@ -210,14 +206,10 @@ def main():
     ap.add_argument("--input", default=str(DEFAULT_EXAMPLES))
     ap.add_argument("--out", default="runs/smoke")
     ap.add_argument("--variants", nargs="+", choices=["B", "R", "N", "R2"], default=["B", "R"])
-    ap.add_argument("--baseline", choices=["native", "content", "strict"], default="native")
-    ap.add_argument("--format-reminder", action="store_true",
-                    help="Experimental synthetic-only prompt adjustment; not the frozen research prompt")
+    ap.add_argument("--output-protocol", choices=[JSON_PROTOCOL], default=JSON_PROTOCOL)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     records = validate_records([json.loads(s) for s in Path(args.input).read_text().splitlines() if s.strip()])
-    if args.format_reminder and any(r["study_partition"] != "synthetic" for r in records):
-        raise ValueError("Format reminder is an unfrozen diagnostic; synthetic fixtures only")
     outdir = Path(args.out)
     outdir.mkdir(parents=True, exist_ok=False)  # Never mix or overwrite runs.
     plans = []
@@ -225,31 +217,33 @@ def main():
         for v in args.variants:
             value = variant(r["original_response"], v)
             for mapping in MAPPINGS:
-                turns = messages(r["original_prompt"], value["assistant_response"], mapping, args.baseline, format_reminder=args.format_reminder)
+                turns = structured_messages(r["original_prompt"], value["assistant_response"], mapping)
                 plans.append((r, value, mapping, turns))
     if args.dry_run:
         with (outdir/"planned_inputs.jsonl").open("w") as f:
             for r, value, mapping, turns in plans:
-                f.write(json.dumps({"source_id": r["source_id"], **value, "mapping": mapping, "messages": turns}, ensure_ascii=False)+"\n")
-        print(f"Validated {len(records)} records; planned {len(plans)} calls. NO model was run.")
+                f.write(json.dumps({"source_id": r["source_id"], **value, "mapping": mapping,
+                                    "output_protocol": args.output_protocol, "messages": turns}, ensure_ascii=False)+"\n")
+        print(f"Validated {len(records)} records; planned {len(plans)} calls "
+              f"under {args.output_protocol}. NO model was run.")
         return
     if args.compute_dtype == "float16" and any(r["study_partition"] != "synthetic" for r in records):
         raise ValueError("T4/FP16 compatibility mode only permits synthetic fixtures; protocol experiments require BF16")
     runner = Runner(MODELS[args.model], args.revision, args.compute_dtype)
-    runner.meta.update(prompt_format="reminder_v1" if args.format_reminder else "native",
-                       protocol_prompt_match=not args.format_reminder)
+    runner.meta.update(output_protocol=JSON_PROTOCOL, generation_budget=256)
     # Preflight encodes every planned input before model calls (no arbitrary token cap).
     # Dataset intake keeps complete cases; only true model-context overflow fails here.
     for _, _, _, turns in plans:
         runner.encode(turns)
     print(f"Preflight passed for {len(plans)} inputs; running identity check", flush=True)
     (outdir/"run_config.json").write_text(json.dumps({**runner.meta, "args": vars(args),
-        "policy": POLICY, "policy_sha256": sha(POLICY), "baseline": args.baseline,
+        "policy": POLICY, "policy_sha256": sha(POLICY), "baseline": "native",
         "input_file_sha256": sha(Path(args.input).read_text()), "validated_gpu": False}, indent=2))
-    # Native/identity equality checks reproducibility and prefill hook execution.
+    # Identity equality checks reproducibility and prefill hooks under the selected protocol.
     turns = plans[0][3]
-    native, native_states = runner.run(turns)
-    identity, identity_states = runner.run(turns, edit={"layer": runner.depths[0], "mode": "identity"})
+    native, native_states = runner.run(turns, output_protocol=args.output_protocol)
+    identity, identity_states = runner.run(turns, edit={"layer": runner.depths[0], "mode": "identity"},
+                                           output_protocol=args.output_protocol)
     if native["output_ids"] != identity["output_ids"] or any(abs(native[k]-identity[k]) > 1e-5 for k in ("logp_A", "logp_B")):
         raise RuntimeError("Identity smoke check failed; stop this model")
     if any(not runner.torch.equal(native_states[k], identity_states[k]) for k in native_states):
@@ -257,13 +251,13 @@ def main():
     (outdir/"identity_check.json").write_text(json.dumps({"passed": True, "calls": 2}))
     with (outdir/"results.jsonl").open("w") as f:
         for i, (r, value, mapping, turns) in enumerate(plans):
-            result, states = runner.run(turns)
+            result, states = runner.run(turns, output_protocol=args.output_protocol)
             unsafe_code = "B" if mapping == "A_safe" else "A"
             safe_code = "A" if mapping == "A_safe" else "B"
             state_file = f"states_{i:05d}.pt"
             runner.torch.save(states, outdir/state_file)
             row = {**r, **value, **result, "mapping": mapping,
-                "verdict": parse(result["parsed_text"], mapping),
+                "verdict": parse_structured(result["parsed_text"], mapping)["verdict"],
                 "semantic_margin": result[f"logp_{unsafe_code}"]-result[f"logp_{safe_code}"],
                 "model_revision": runner.revision, "states_file": state_file,
                 "prompt_sha256": sha(json.dumps(turns, ensure_ascii=False)), "run_index": i}

@@ -36,7 +36,7 @@ def main():
     def load(path):
         return [json.loads(l) for l in open(path)]
     raw_mismatch = collections.Counter()
-    for m in ["llama_guard", "shieldgemma", "ministral", "gemma"]:
+    for m in sorted(df.model.unique()):
         for row in load(f"{MERGED}/baseline/{m}/verdicts.jsonl"):
             raw_mismatch[(m, "B", "n")] += 1
         for row in load(f"{MERGED}/controls/{m}/verdicts.jsonl"):
@@ -99,7 +99,7 @@ def main():
                               for (m, mp, rp) in V if rp == 0 for c in V[(m, mp, 0)]}
     # --- proposal gate (chat models, repeat 0)
     gate = {}
-    for m in ["ministral", "gemma"]:
+    for m in sorted(df.loc[df.mapping == "A_safe", "model"].unique()):
         a, b = V[(m, "A_safe", 0)], V[(m, "A_unsafe", 0)]
         res = {}
         for mp, v in [("A_safe", a), ("A_unsafe", b)]:

@@ -1,17 +1,9 @@
-# Refusal-cue experiments
+# Experiments
 
-These notebooks sit on top of the `refusal_cues` package. The package owns the protocol, the pilot runner, metrics, and the Llama Guard / ShieldGemma interface. The experiments own the 470-record screens and the activation captures.
-
-| Experiment | What it runs |
+| Experiment | Run |
 |---|---|
-| [behavioral_refusal_screen](behavioral_refusal_screen/README.md) | 470 records × 7 conditions × 4 judges × repeats and chat mappings |
-| [activation_capture](activation_capture/README.md) | Residual streams for those four judges (19,740 prompts) |
-| [qwen3guard_judge](qwen3guard_judge/README.md) | Qwen3Guard-Gen-8B behavioral screen and residual capture |
+| [Behavioral refusal screen](behavioral_refusal_screen/README.md) | Score Gemma, Llama Guard, ShieldGemma and Qwen3Guard-Gen-8B on the original response and six prefix conditions. |
+| [Activation capture](activation_capture/README.md) | Capture six decoder depths for the same four judges and compare repeat-zero verdicts. |
+| [Qwen3Guard](qwen3guard_judge/README.md) | Run the native three-label behavioral and activation workflow for Qwen3Guard-Gen-8B alone. |
 
-Judge code:
-
-| Judge | Inference | Activations |
-|---|---|---|
-| Llama Guard 3 1B, ShieldGemma 2B | `refusal_cues/guard_judges.py` (`GuardRunner`, `guard_messages`, `parse_guard`) | `activation_capture/src/activation_tools.py` |
-| Gemma 4 12B, Ministral 3 8B | `refusal_cues/inference.py` `Runner`, plus `structured_messages` from the Colab baseline bundle | same capture module |
-| Qwen3Guard-Gen-8B | `qwen3guard_judge/src/qwen3guard_judge.py` `Qwen3GuardRunner` | `qwen3guard_judge/src/activation_tools.py` |
+Each notebook loads implementation code from the Git checkout. Supply development data through Drive. The main README describes the verdict formats and library modules.
